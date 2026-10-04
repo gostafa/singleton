@@ -677,7 +677,8 @@ linters:
         - assign-expr
       disable: []
   exclusions:
-    paths: [.*_test.go]
+    paths:
+      - .*_test.go
     generated: disable
     warn-unused: true
 
