@@ -76,7 +76,10 @@ func BenchmarkNew(b *testing.B) {
 	})
 
 	b.Run("with_options", func(b *testing.B) {
-		options := append(benchOptions(), singleton.WithRetryObserver(func(singleton.RetryEvent) {}))
+		options := append(
+			benchOptions(),
+			singleton.WithRetryObserver(func(singleton.RetryEvent) {}),
+		)
 
 		for b.Loop() {
 			_, err := singleton.New(successfulFactory, options...)
