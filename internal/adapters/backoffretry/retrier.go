@@ -105,8 +105,7 @@ func runOnce[T any](ctx context.Context, operation ports.Operation[T]) (T, error
 		return value, nil
 	}
 
-	var permanent *domain.PermanentError
-	if errors.As(err, &permanent) {
+	if permanent, ok := errors.AsType[*domain.PermanentError](err); ok {
 		// Retry finds the marker with errors.As and replaces this error with a
 		// RetryError carrying permanent.Err, so this message never reaches a
 		// caller.
