@@ -1,5 +1,9 @@
 # singleton
 
+
+[![LICENSE](https://img.shields.io/github/license/gostafa/singleton)](/LICENSE) [![codecov](https://codecov.io/gh/gostafa/singleton/graph/badge.svg)](https://codecov.io/gh/gostafa/singleton)
+
+
 Lazy, retryable, process-local singletons for Go.
 
 One shared value, initialized once, on first use — with exponential backoff, a bounded retry budget, and one property most `sync.Once`-based helpers get wrong: **a caller that gives up cannot poison the singleton for the rest of the process.**

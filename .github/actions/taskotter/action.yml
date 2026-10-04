@@ -25,6 +25,7 @@ inputs:
       yamlfix
       zizmor
       adrs
+      go-junit-report
   js:
     description: JavaScript runtime configuration
     required: false
