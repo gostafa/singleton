@@ -1,0 +1,627 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+vars:
+  NIX_INSTALL_URL: '{{.NIX_INSTALL_URL | default "https://nixos.org/nix/install"}}'
+  NIX_VERSION: '{{.NIX_VERSION | default ""}}'
+  NIX_CHANNEL: '{{.NIX_CHANNEL | default "nixpkgs-unstable"}}'
+  NIX_CONF: '{{.NIX_CONF | default ""}}'
+  NIX_EXPERIMENTAL_FEATURES: '{{.NIX_EXPERIMENTAL_FEATURES | default "nix-command flakes"}}'
+  NIX_NEEDED_FEATURES: '{{.NIX_NEEDED_FEATURES | default "nix-command flakes"}}'
+  NIX_EXPERIMENTAL_FEATURES_ALL: >-
+    {{.NIX_EXPERIMENTAL_FEATURES_ALL | default "auto-allocate-uids blake3-hashes
+    ca-derivations cgroups configurable-impure-env daemon-trust-override
+    dynamic-derivations external-builders fetch-closure fetch-tree flakes
+    git-hashing impure-derivations local-overlay-store mounted-ssh-store
+    nix-command parse-toml-timestamps pipe-operators read-only-local-store
+    recursive-nix verified-fetches"}}
+  NIX_INSTALLABLE: '{{.NIX_INSTALLABLE | default ""}}'
+  NIX_COMMAND: '{{.NIX_COMMAND | default ""}}'
+  NIX_EXTRA_ARGS: '{{.NIX_EXTRA_ARGS | default ""}}'
+  NIX_LOAD: >-
+    {{.NIX_LOAD | default `if [ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ];
+    then . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh;
+    elif [ -e "$HOME/.nix-profile/etc/profile.d/nix.sh" ];
+    then . "$HOME/.nix-profile/etc/profile.d/nix.sh"; fi;
+    export PATH="/nix/var/nix/profiles/default/bin:$HOME/.nix-profile/bin:${PATH:-}"`}}
+
+tasks:
+  default:
+    run: once
+    desc: Show available Nix automation tasks
+    summary: Display the list of available Nix-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install Nix on the current operating system
+    summary: |
+      Install Nix following the Nix 2.34 binary installer.
+      Linux with systemd and macOS use the recommended multi-user install
+      (--daemon). Linux without systemd uses the single-user install
+      (--no-daemon). Windows WSL2 follows the Linux path. Native Windows is
+      not supported.
+      Pass NIX_VERSION=x.y.z to pin a release from releases.nixos.org.
+    cmds:
+      - task: _install:unix
+      - task: _windows:unsupported
+  install:undo:
+    run: once
+    desc: Remove Nix from the current operating system
+    summary: Alias for uninstall. Runs the official Nix 2.34 uninstall steps.
+    cmds:
+      - task: uninstall
+  uninstall:
+    run: once
+    desc: Uninstall Nix from the current operating system
+    summary: |
+      Remove Nix using the official Nix 2.34 uninstall steps.
+      Multi-user Linux stops nix-daemon, deletes the store and profiles, and
+      removes nixbld users. macOS restores installer backups, unloads launchd
+      services, and deletes the Nix Store APFS volume. Single-user Linux
+      removes /nix and the user profile files. Native Windows is a no-op.
+    prompt:
+      - This will remove Nix from this machine.
+      - Continue?
+    cmds:
+      - task: _uninstall:linux
+      - task: _uninstall:macos
+      - task: _uninstall:windows
+  upgrade:
+    run: once
+    desc: Upgrade Nix from a nixpkgs channel
+    summary: |
+      Upgrade Nix with nix-env as documented in Nix 2.34.
+      Installs nix and cacert from NIX_CHANNEL (default nixpkgs-unstable),
+      then restarts the Nix daemon on multi-user Linux (systemd) and macOS
+      (launchctl). Single-user installs skip the daemon restart.
+      Auto-installs Nix if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _upgrade:linux
+      - task: _upgrade:macos
+      - task: _windows:unsupported
+  version:
+    run: once
+    desc: Show the installed Nix version
+    summary: Print the active Nix version via nix --version. Auto-installs Nix if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _nix:unix
+        vars:
+          NIX_ARGS: --version
+      - task: _windows:unsupported
+  features:enable:
+    desc: Enable Nix experimental features in nix.conf
+    summary: |
+      Write experimental-features to nix.conf (default ~/.config/nix/nix.conf,
+      or NIX_CONF when set). Defaults to nix-command flakes, the usual pair
+      for the new nix CLI and flakes. Pass NIX_EXPERIMENTAL_FEATURES to set a
+      custom space-separated list, or NIX_EXPERIMENTAL_FEATURES=all to enable
+      every Nix 2.34 experimental feature. Existing flags in nix.conf are
+      kept and merged. Auto-installs Nix if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _features:enable:unix
+      - task: _windows:unsupported
+  features:show:
+    run: once
+    desc: Show enabled and available Nix experimental features
+    summary: |
+      Print the experimental-features line from nix.conf and list every
+      experimental feature available in Nix 2.34.
+    cmds:
+      - task: _features:show:unix
+      - task: _windows:unsupported
+  install:shell:
+    dir: '{{.USER_WORKING_DIR}}'
+    interactive: true
+    desc: Run a temporary Nix shell with installables (NIX_INSTALLABLE)
+    summary: |
+      Run nix shell so packages are on PATH for one session, without adding
+      them to the user profile. Requires NIX_INSTALLABLE (for example
+      nixpkgs#hello, or hello which is expanded to nixpkgs#hello).
+      Pass NIX_COMMAND to run a command instead of an interactive shell
+      (nix shell --command). Pass NIX_EXTRA_ARGS for extra nix flags.
+      Auto-installs Nix and enables nix-command and flakes if they are missing.
+    deps:
+      - task: _features:needed
+    requires:
+      vars:
+        - NIX_INSTALLABLE
+    preconditions:
+      - sh: test -n "{{.NIX_INSTALLABLE}}"
+        msg: NIX_INSTALLABLE is required. Pass NIX_INSTALLABLE=nixpkgs#hello (or hello).
+    cmds:
+      - task: _nix:pkg:unix
+        vars:
+          NIX_SUBCMD: shell
+          NIX_TRAILING: '{{if .NIX_COMMAND}}--command {{.NIX_COMMAND}}{{end}}'
+          NIX_INSTALLABLE: '{{.NIX_INSTALLABLE}}'
+          NIX_EXTRA_ARGS: '{{.NIX_EXTRA_ARGS}}'
+      - task: _windows:unsupported
+  install:profile:
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Add installables to the user Nix profile (NIX_INSTALLABLE)
+    summary: |
+      Run nix profile add so packages stay on PATH across sessions.
+      nix profile install is an alias for nix profile add (Nix 2.34).
+      Requires NIX_INSTALLABLE (for example nixpkgs#hello, or hello which
+      is expanded to nixpkgs#hello). Pass NIX_EXTRA_ARGS for extra nix flags.
+      Auto-installs Nix and enables nix-command and flakes if they are missing.
+      Must not use run: once: each caller passes a different NIX_INSTALLABLE,
+      and skipping the second call leaves that package off PATH.
+    deps:
+      - task: _features:needed
+    requires:
+      vars:
+        - NIX_INSTALLABLE
+    preconditions:
+      - sh: test -n "{{.NIX_INSTALLABLE}}"
+        msg: NIX_INSTALLABLE is required. Pass NIX_INSTALLABLE=nixpkgs#hello (or hello).
+    cmds:
+      - task: _nix:pkg:unix
+        vars:
+          NIX_SUBCMD: profile add
+          NIX_INSTALLABLE: '{{.NIX_INSTALLABLE}}'
+          NIX_EXTRA_ARGS: '{{.NIX_EXTRA_ARGS}}'
+      - task: _windows:unsupported
+  _features:needed:
+    run: once
+    internal: true
+    desc: Enable nix-command and flakes required by shell and profile tasks
+    summary: |
+      Install Nix if missing, then merge nix-command and flakes into nix.conf.
+      Used as the shared prerequisite for install:shell and install:profile so
+      those tasks do not depend on a prior features:enable run.
+    deps:
+      - task: install
+    cmds:
+      - task: _features:enable:unix
+        vars:
+          NIX_EXPERIMENTAL_FEATURES: '{{.NIX_NEEDED_FEATURES}}'
+  _nix:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    requires:
+      vars:
+        - NIX_ARGS
+    preconditions:
+      - sh: >-
+          [ -x /nix/var/nix/profiles/default/bin/nix ]
+          || [ -x "$HOME/.nix-profile/bin/nix" ]
+          || command -v nix >/dev/null 2>&1
+        msg: Nix is not installed. Run task install first.
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; nix {{.NIX_ARGS}}'
+  _nix:pkg:unix:
+    internal: true
+    dir: '{{.USER_WORKING_DIR}}'
+    platforms:
+      - linux
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    requires:
+      vars:
+        - NIX_SUBCMD
+    vars:
+      NIX_TRAILING: ''
+    preconditions:
+      - sh: test -n "{{.NIX_INSTALLABLE}}"
+        msg: NIX_INSTALLABLE is required. Pass NIX_INSTALLABLE=nixpkgs#hello (or hello).
+    cmds:
+      - |
+        i="{{.NIX_INSTALLABLE}}"
+        case "$i" in
+          *'#'*|.*|/*) ;;
+          *) i="nixpkgs#$i" ;;
+        esac
+        extra="{{.NIX_EXTRA_ARGS}}"
+        trailing="{{.NIX_TRAILING}}"
+        if [ "{{.NIX_SUBCMD}}" = "profile add" ]; then
+          bash -lc '{{.NIX_LOAD}};
+          for pkg in '"$i"'; do
+            out=$(nix --extra-experimental-features "{{.NIX_NEEDED_FEATURES}}" \
+              profile add "$pkg" '"$extra"' 2>&1) && status=0 || status=$?
+            printf "%s\n" "$out"
+            if [ "$status" -eq 0 ]; then
+              continue
+            fi
+            if printf "%s" "$out" | grep -qi already; then
+              continue
+            fi
+            exit "$status"
+          done'
+        else
+          bash -lc '{{.NIX_LOAD}};
+          nix --extra-experimental-features "{{.NIX_NEEDED_FEATURES}}" {{.NIX_SUBCMD}} '"$i"' '"$extra"' '"$trailing"
+        fi
+  _install:unix:
+    run: once
+    internal: true
+    desc: Install Nix on Linux, macOS, or WSL2
+    summary: |
+      Run the official installer from NIX_INSTALL_URL, or from
+      releases.nixos.org when NIX_VERSION is set. macOS and systemd Linux
+      pass --daemon; Linux without systemd passes --no-daemon.
+    platforms:
+      - linux
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    status:
+      - >-
+        nix_bin="";
+        if [ -x /nix/var/nix/profiles/default/bin/nix ]; then
+        nix_bin=/nix/var/nix/profiles/default/bin/nix;
+        elif [ -x "$HOME/.nix-profile/bin/nix" ]; then
+        nix_bin="$HOME/.nix-profile/bin/nix";
+        else nix_bin="$(command -v nix 2>/dev/null || true)"; fi;
+        [ -n "$nix_bin" ] && [ -x "$nix_bin" ]
+        && { [ -z "{{.NIX_VERSION}}" ] || "$nix_bin" --version | grep -Fq "{{.NIX_VERSION}}"; }
+    preconditions:
+      - sh: command -v curl >/dev/null 2>&1
+        msg: curl is required to download the Nix installer.
+      - sh: test "$(id -u)" -eq 0 || command -v sudo >/dev/null 2>&1
+        msg: sudo is required to install Nix when not running as root.
+    cmds:
+      - |
+        url="{{.NIX_INSTALL_URL}}"
+        if [ -n "{{.NIX_VERSION}}" ]; then
+          url="https://releases.nixos.org/nix/nix-{{.NIX_VERSION}}/install"
+          echo "Installing Nix {{.NIX_VERSION}} from $url..."
+        else
+          echo 'Installing Nix via the official installer...'
+        fi
+        flags="--daemon"
+        if [ "$(uname -s)" != Darwin ] && [ ! -d /run/systemd/system ]; then
+          flags="--no-daemon"
+          echo 'systemd not detected; using single-user (--no-daemon) install.'
+        fi
+        curl --proto '=https' --tlsv1.2 -L "$url" | sh -s -- $flags --yes
+        echo 'Nix installed. Restart your shell or tasks will use NIX_LOAD to locate the binary.'
+  _uninstall:linux:
+    run: once
+    internal: true
+    desc: Uninstall Nix on Linux or WSL2
+    summary: Follow the Nix 2.34 Linux multi-user or single-user uninstall steps.
+    platforms:
+      - linux
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    status:
+      - >-
+        [ ! -d /nix/store ]
+        && [ ! -x /nix/var/nix/profiles/default/bin/nix ]
+        && [ ! -x "$HOME/.nix-profile/bin/nix" ]
+        && ! command -v nix >/dev/null 2>&1
+    cmds:
+      - echo 'Uninstalling Nix...'
+      - |
+        if [ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
+          if command -v systemctl >/dev/null 2>&1; then
+            sudo systemctl stop nix-daemon.service 2>/dev/null || true
+            sudo systemctl disable nix-daemon.socket nix-daemon.service 2>/dev/null || true
+            sudo systemctl daemon-reload 2>/dev/null || true
+          fi
+          sudo rm -r -f \
+            /etc/nix \
+            /etc/profile.d/nix.sh \
+            /etc/tmpfiles.d/nix-daemon.conf \
+            /nix \
+            "$HOME/.local/share/nix" \
+            "$HOME/.local/state/nix" \
+            "$HOME/.cache/nix" \
+            "$HOME/.nix-defexpr" \
+            "$HOME/.nix-profile" \
+            "$HOME/.nix-channels" \
+            ~root/.nix-channels \
+            ~root/.nix-defexpr \
+            ~root/.nix-profile \
+            ~root/.cache/nix
+          for i in $(seq 1 32); do
+            sudo userdel "nixbld$i" 2>/dev/null || true
+          done
+          sudo groupdel nixbld 2>/dev/null || true
+          for f in /etc/bash.bashrc /etc/bashrc /etc/profile /etc/zsh/zshrc /etc/zshrc; do
+            if [ -f "$f" ] && grep -q '# Nix' "$f"; then
+              sudo sed -i.bak-before-nix-uninstall '/# Nix/,/# End Nix/d' "$f"
+            fi
+          done
+        else
+          rm -rf \
+            "$HOME/.nix-channels" \
+            "$HOME/.nix-defexpr" \
+            "$HOME/.nix-profile" \
+            "$HOME/.local/share/nix" \
+            "$HOME/.local/state/nix" \
+            "$HOME/.cache/nix"
+          if [ -e /nix ]; then
+            if [ -w /nix ]; then
+              rm -rf /nix
+            else
+              sudo rm -r -f /nix
+            fi
+          fi
+        fi
+      - echo 'Nix uninstalled.'
+  _uninstall:macos:
+    run: once
+    internal: true
+    desc: Uninstall Nix on macOS
+    summary: Follow the Nix 2.34 macOS multi-user uninstall steps.
+    platforms:
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    status:
+      - >-
+        [ ! -d /nix/store ]
+        && [ ! -x /nix/var/nix/profiles/default/bin/nix ]
+        && [ ! -x "$HOME/.nix-profile/bin/nix" ]
+        && ! command -v nix >/dev/null 2>&1
+    preconditions:
+      - sh: test "$(id -u)" -eq 0 || command -v sudo >/dev/null 2>&1
+        msg: sudo is required to uninstall Nix on macOS when not running as root.
+    cmds:
+      - echo 'Uninstalling Nix...'
+      - |
+        if [ -f /etc/zshrc.backup-before-nix ]; then
+          sudo mv /etc/zshrc.backup-before-nix /etc/zshrc
+        fi
+        if [ -f /etc/bashrc.backup-before-nix ]; then
+          sudo mv /etc/bashrc.backup-before-nix /etc/bashrc
+        fi
+        if [ -f /etc/bash.bashrc.backup-before-nix ]; then
+          sudo mv /etc/bash.bashrc.backup-before-nix /etc/bash.bashrc
+        fi
+        sudo launchctl unload /Library/LaunchDaemons/org.nixos.nix-daemon.plist 2>/dev/null || true
+        sudo rm -f /Library/LaunchDaemons/org.nixos.nix-daemon.plist
+        sudo launchctl unload /Library/LaunchDaemons/org.nixos.darwin-store.plist 2>/dev/null || true
+        sudo rm -f /Library/LaunchDaemons/org.nixos.darwin-store.plist
+        sudo dscl . -delete /Groups/nixbld 2>/dev/null || true
+        for u in $(sudo dscl . -list /Users | grep _nixbld || true); do
+          sudo dscl . -delete "/Users/$u" || true
+        done
+        if [ -f /etc/fstab ]; then
+          sudo sed -i.bak-before-nix-uninstall '/[[:space:]]\/nix[[:space:]]/d' /etc/fstab
+        fi
+        if [ -f /etc/synthetic.conf ]; then
+          if [ "$(cat /etc/synthetic.conf)" = "nix" ]; then
+            sudo rm -f /etc/synthetic.conf
+          else
+            sudo sed -i.bak-before-nix-uninstall '/^nix$/d' /etc/synthetic.conf
+          fi
+        fi
+        sudo rm -r -f \
+          /etc/nix \
+          /var/root/.nix-profile \
+          /var/root/.nix-defexpr \
+          /var/root/.nix-channels \
+          "$HOME/.nix-profile" \
+          "$HOME/.nix-defexpr" \
+          "$HOME/.nix-channels" \
+          "$HOME/.local/share/nix" \
+          "$HOME/.local/state/nix" \
+          "$HOME/.cache/nix"
+        if diskutil info /nix >/dev/null 2>&1; then
+          sudo diskutil apfs deleteVolume /nix || true
+        fi
+        vol="$(diskutil list | awk '/Nix Store/{print $NF; exit}' || true)"
+        if [ -n "${vol:-}" ]; then
+          sudo diskutil apfs deleteVolume "$vol" || true
+        fi
+      - echo 'Nix uninstalled. An empty /nix directory may remain until the next reboot.'
+  _uninstall:windows:
+    run: once
+    internal: true
+    desc: Skip Nix uninstall on native Windows
+    summary: Native Windows does not host a Nix install from this Taskfile, so uninstall is a no-op.
+    platforms:
+      - windows
+    status:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "if (Get-Command nix -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }"
+    cmds:
+      - echo Nix is not installed on native Windows. Nothing to remove.
+  _upgrade:linux:
+    run: once
+    internal: true
+    desc: Upgrade Nix on Linux or WSL2
+    summary: |
+      Run nix-env to install nix and cacert from NIX_CHANNEL, then restart
+      nix-daemon on multi-user installs.
+    platforms:
+      - linux
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    preconditions:
+      - sh: >-
+          [ -x /nix/var/nix/profiles/default/bin/nix ]
+          || [ -x "$HOME/.nix-profile/bin/nix" ]
+          || command -v nix >/dev/null 2>&1
+        msg: Nix is not installed. Run task install first.
+    cmds:
+      - echo 'Upgrading Nix from channel {{.NIX_CHANNEL}}...'
+      - |
+        if [ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then
+          sudo bash -lc '{{.NIX_LOAD}};
+          nix-env --install --file "<nixpkgs>" --attr nix cacert -I nixpkgs=channel:{{.NIX_CHANNEL}}'
+          sudo systemctl daemon-reload
+          sudo systemctl restart nix-daemon
+        else
+          bash -lc '{{.NIX_LOAD}};
+          nix-env --install --file "<nixpkgs>" --attr nix cacert -I nixpkgs=channel:{{.NIX_CHANNEL}}'
+        fi
+      - echo 'Nix upgraded.'
+  _upgrade:macos:
+    run: once
+    internal: true
+    desc: Upgrade Nix on macOS
+    summary: |
+      Run sudo nix-env to install nix and cacert from NIX_CHANNEL, then reload
+      the nix-daemon launchd service.
+    platforms:
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    preconditions:
+      - sh: >-
+          [ -x /nix/var/nix/profiles/default/bin/nix ]
+          || [ -x "$HOME/.nix-profile/bin/nix" ]
+          || command -v nix >/dev/null 2>&1
+        msg: Nix is not installed. Run task install first.
+    cmds:
+      - echo 'Upgrading Nix from channel {{.NIX_CHANNEL}}...'
+      - >-
+        sudo bash -lc '{{.NIX_LOAD}};
+        nix-env --install --file "<nixpkgs>" --attr nix cacert -I nixpkgs=channel:{{.NIX_CHANNEL}}'
+      - sudo launchctl remove org.nixos.nix-daemon
+      - sudo launchctl load /Library/LaunchDaemons/org.nixos.nix-daemon.plist
+      - echo 'Nix upgraded.'
+  _features:enable:unix:
+    internal: true
+    desc: Enable experimental features in nix.conf on Linux, macOS, or WSL2
+    summary: Merge NIX_EXPERIMENTAL_FEATURES into the experimental-features setting in nix.conf.
+    platforms:
+      - linux
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    cmds:
+      - |
+        conf="{{.NIX_CONF}}"
+        if [ -z "$conf" ]; then
+          conf="${HOME}/.config/nix/nix.conf"
+        fi
+        features="{{.NIX_EXPERIMENTAL_FEATURES}}"
+        if [ "$features" = "all" ]; then
+          features="{{.NIX_EXPERIMENTAL_FEATURES_ALL}}"
+        fi
+        dir="$(dirname "$conf")"
+        as_root=""
+        if [ -f "$conf" ] && [ ! -w "$conf" ]; then
+          as_root=sudo
+        elif [ -d "$dir" ] && [ ! -w "$dir" ]; then
+          as_root=sudo
+        elif [ ! -d "$dir" ] && [ ! -w "$(dirname "$dir")" ]; then
+          as_root=sudo
+        fi
+        $as_root mkdir -p "$dir"
+        if [ ! -e "$conf" ]; then
+          $as_root touch "$conf"
+        fi
+        existing=""
+        if grep -E '^experimental-features[[:space:]]*=' "$conf" >/dev/null 2>&1; then
+          existing="$(sed -n 's/^experimental-features[[:space:]]*=[[:space:]]*//p' "$conf" | tr '\n' ' ')"
+        fi
+        merged="$(printf '%s\n' $existing $features | awk 'NF && !seen[$0]++ {
+          printf "%s%s", sep, $0; sep=" " } END { print "" }')"
+        tmp="$(mktemp)"
+        if grep -E '^experimental-features[[:space:]]*=' "$conf" >/dev/null 2>&1; then
+          awk -v val="$merged" '
+            /^experimental-features[[:space:]]*=/ && !done {
+              print "experimental-features = " val
+              done=1
+              next
+            }
+            { print }
+          ' "$conf" > "$tmp"
+        else
+          cat "$conf" > "$tmp"
+          printf 'experimental-features = %s\n' "$merged" >> "$tmp"
+        fi
+        $as_root mv "$tmp" "$conf"
+        echo "Enabled experimental features in $conf:"
+        echo "  $merged"
+  _features:show:unix:
+    run: once
+    internal: true
+    desc: Show experimental features on Linux, macOS, or WSL2
+    summary: Print the nix.conf setting and the Nix 2.34 experimental-feature catalog.
+    platforms:
+      - linux
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    cmds:
+      - |
+        conf="{{.NIX_CONF}}"
+        if [ -z "$conf" ]; then
+          conf="${HOME}/.config/nix/nix.conf"
+        fi
+        echo "nix.conf: $conf"
+        if [ -f "$conf" ] && grep -E '^experimental-features[[:space:]]*=' "$conf" >/dev/null 2>&1; then
+          grep -E '^experimental-features[[:space:]]*=' "$conf"
+        else
+          echo 'experimental-features = (not set)'
+        fi
+        echo
+        echo 'Nix 2.34 experimental features (https://nix.dev/manual/nix/2.34/development/experimental-features.html):'
+        echo '  auto-allocate-uids           Automatically pick UIDs for builds instead of nixbld* accounts'
+        echo '  blake3-hashes                Support for BLAKE3 hashes'
+        echo '  ca-derivations               Content-addressed derivations to skip rebuilds when outputs are unchanged'
+        echo '  cgroups                      Execute builds inside cgroups'
+        echo '  configurable-impure-env      Allow the impure-env setting'
+        echo '  daemon-trust-override        Force trusting or not trusting nix-daemon clients'
+        echo '  dynamic-derivations          Text-hashed .drv outputs and dependencies on derivation outputs'
+        echo '  external-builders            External builders / sandbox providers'
+        echo '  fetch-closure                builtins.fetchClosure'
+        echo '  fetch-tree                   builtins.fetchTree (also enabled by flakes)'
+        echo '  flakes                       Flakes (nix flake)'
+        echo '  git-hashing                  Content-addressed store objects hashed with Git hashing'
+        echo '  impure-derivations           Derivations with __impure that may produce different outputs'
+        echo '  local-overlay-store          Local overlay store'
+        echo '  mounted-ssh-store            Mounted SSH store'
+        echo '  nix-command                  New nix subcommands (nix build, nix run, nix flake, ...)'
+        echo '  parse-toml-timestamps        Parse timestamps in builtins.fromTOML'
+        echo '  pipe-operators               |> and <| operators in the Nix language'
+        echo '  read-only-local-store        read-only parameter in local store URIs'
+        echo '  recursive-nix                Allow derivation builders to call Nix'
+        echo '  verified-fetches             Verify git commit signatures in builtins.fetchGit'
+  _windows:unsupported:
+    run: once
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "Write-Error 'Nix is not supported on native Windows. Install WSL2 with systemd,
+        then run this task from inside WSL.';
+        exit 1"

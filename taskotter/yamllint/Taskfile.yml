@@ -1,0 +1,153 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  uv:
+    taskfile: ../uv/Taskfile.yml
+  winget:
+    taskfile: ../winget/Taskfile.yml
+
+vars:
+  YAMLLINT_NIX_INSTALLABLE: '{{.YAMLLINT_NIX_INSTALLABLE | default "nixpkgs#yamllint"}}'
+  YAMLLINT_UV_TOOL: '{{.YAMLLINT_UV_TOOL | default "yamllint"}}'
+  YAMLLINT_TARGETS: '{{.YAMLLINT_TARGETS | default "."}}'
+  YAMLLINT_CONFIG: '{{.YAMLLINT_CONFIG | default ""}}'
+  YAMLLINT_EXTRA_ARGS: '{{.YAMLLINT_EXTRA_ARGS | default ""}}'
+
+tasks:
+  default:
+    run: once
+    desc: Show available yamllint automation tasks
+    summary: Display the list of available yamllint-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install yamllint via Nix (Unix) or uv tool (Windows)
+    summary: |
+      Install yamllint into the user Nix profile on Linux and macOS when it
+      is not already on PATH. On Windows, installs via uv tool install
+      (YAMLLINT_UV_TOOL). Override YAMLLINT_NIX_INSTALLABLE or
+      YAMLLINT_UV_TOOL to pin a different package or version.
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    status:
+      - command -v yamllint >/dev/null 2>&1
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.YAMLLINT_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    status:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.UV_LOAD}}; yamllint --version; exit \$LASTEXITCODE"
+    cmds:
+      - task: uv:tool:install
+        vars:
+          UV_TOOL: '{{.YAMLLINT_UV_TOOL}}'
+  version:
+    run: once
+    desc: Show the active yamllint version
+    summary: |
+      Print the version reported by the yamllint binary resolved from PATH.
+      Auto-installs yamllint if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  ci:
+    run: once
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Lint YAML files in strict mode for CI (YAMLLINT_TARGETS=path)
+    summary: |
+      Run yamllint --strict against YAMLLINT_TARGETS. Exits non-zero on warnings as
+      well as errors, making it suitable for continuous integration pipelines.
+      Auto-installs yamllint if missing.
+    deps:
+      - task: install
+    cmds:
+      - cmd: >-
+          bash -lc '{{.NIX_LOAD}}; yamllint --strict {{if .YAMLLINT_CONFIG}}-c
+          "{{.YAMLLINT_CONFIG}}" {{end}} {{if .YAMLLINT_TARGETS}}{{.YAMLLINT_TARGETS}}
+          {{else}}.{{end}} {{.YAMLLINT_EXTRA_ARGS}}
+          && echo "✅ yamllint passed" || { echo "❌ yamllint failed"; exit 1; }'
+        platforms:
+          - linux
+          - darwin
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.UV_LOAD}};
+          yamllint --strict
+          {{if .YAMLLINT_CONFIG}}-c '{{.YAMLLINT_CONFIG}}' {{end}}
+          {{if .YAMLLINT_TARGETS}}{{.YAMLLINT_TARGETS}}{{else}}.{{end}}
+          {{.YAMLLINT_EXTRA_ARGS}};
+          exit \$LASTEXITCODE"
+        platforms:
+          - windows
+  config:init:
+    run: once
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Create a default .yamllint configuration file
+    summary: |
+      Write a sensible default .yamllint file in the current directory.
+      Extends yamllint defaults with a relaxed line-length limit and explicit
+      truthy values. Skipped if .yamllint already exists.
+    status:
+      - test -f .yamllint
+    cmds:
+      - printf '---\n' > .yamllint
+      - "printf 'extends: default\\n' >> .yamllint"
+      - printf 'rules:\n' >> .yamllint
+      - printf '  line-length:\n' >> .yamllint
+      - "printf '    max: 120\\n' >> .yamllint"
+      - printf '  truthy:\n' >> .yamllint
+      - "printf \"    allowed-values: ['true', 'false']\\n\" >> .yamllint"
+      - echo 'Created .yamllint with default configuration.'
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show yamllint version on macOS or Linux
+    summary: Print the yamllint version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; yamllint --version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show yamllint version on Windows
+    summary: Print the yamllint version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.UV_LOAD}};
+          yamllint --version; exit \$LASTEXITCODE"
+        msg: yamllint is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.UV_LOAD}}; yamllint --version; exit \$LASTEXITCODE"

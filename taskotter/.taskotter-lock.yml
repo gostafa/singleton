@@ -1,0 +1,179 @@
+---
+configuration:
+  includes_doc: true
+  node_package_manager: bun
+  sync_root: true
+  target_folder: taskotter
+  tasks:
+    - go
+    - golangci-lint
+    - actionlint
+    - yamllint
+    - yamlfix
+    - zizmor
+    - adrs
+generated_root_tasks:
+  - ci
+  - ci:fix
+  - install
+  - version
+managed_files:
+  - destination_module: actionlint
+    path: taskotter/actionlint/README.md
+    sha256: 367e1c506a915babd5c0d7f5ff03536669464296da246057d637d28ae8a68ed9
+    source_module: actionlint
+    source_path: taskfiles/actionlint/README.md
+  - destination_module: actionlint
+    path: taskotter/actionlint/Taskfile.yml
+    sha256: 1f5bc73814b8e1ab7b04b8b7b560196654113ce26f51f857ba11ddbf6bf02ded
+    source_module: actionlint
+    source_path: taskfiles/actionlint/Taskfile.yml
+  - destination_module: adrs
+    path: taskotter/adrs/README.md
+    sha256: 2265d54f424ec68d37d1d12ebe4ae734b99122d4aedc1af283424378c0e50627
+    source_module: adrs
+    source_path: taskfiles/adrs/README.md
+  - destination_module: adrs
+    path: taskotter/adrs/Taskfile.yml
+    sha256: 38d06e3d990accf1f0c8bb26b16b9e476794c15cf9a97696af46990e49e7bfec
+    source_module: adrs
+    source_path: taskfiles/adrs/Taskfile.yml
+  - destination_module: cargo
+    path: taskotter/cargo/README.md
+    sha256: b366ae2b7281d8302e67df332cc2be5e4bb842196b8af01f4053d60ad1e16b61
+    source_module: cargo
+    source_path: taskfiles/cargo/README.md
+  - destination_module: cargo
+    path: taskotter/cargo/Taskfile.yml
+    sha256: 2dab2c7e6a2d6734751299741b78b440d79b4b5dccfbac48fd51b00fc1348dab
+    source_module: cargo
+    source_path: taskfiles/cargo/Taskfile.yml
+  - destination_module: go
+    path: taskotter/go/README.md
+    sha256: ef2e1659c78ac5a24873941e5059369c21bdc6ef7067d9ce9ab3bf45975147ef
+    source_module: go
+    source_path: taskfiles/go/README.md
+  - destination_module: go
+    path: taskotter/go/Taskfile.yml
+    sha256: fb64437e0e02da4eb9ff18ce66dde68f22d336aa08cf411465fa4df3f037404a
+    source_module: go
+    source_path: taskfiles/go/Taskfile.yml
+  - destination_module: golangci-lint
+    path: taskotter/golangci-lint/README.md
+    sha256: 152ca473e123eb72c3beb864e8094274e74f7982be87f9ae38b2dff94c59414e
+    source_module: golangci-lint
+    source_path: taskfiles/golangci-lint/README.md
+  - destination_module: golangci-lint
+    path: taskotter/golangci-lint/Taskfile.yml
+    sha256: b7798165ff72e3d5442dbd30f3acf28c6b3f33e4b6a1842e5c9d632f8f3c80df
+    source_module: golangci-lint
+    source_path: taskfiles/golangci-lint/Taskfile.yml
+  - destination_module: nix
+    path: taskotter/nix/README.md
+    sha256: 5a09576093df15015f2354517ee99e74889135acb07ac8020184e0da330cacfe
+    source_module: nix
+    source_path: taskfiles/nix/README.md
+  - destination_module: nix
+    path: taskotter/nix/Taskfile.yml
+    sha256: ab3901b79f562fc8408ff152e7c242270ba6f4687b2cf845a6520d4fb9e9696f
+    source_module: nix
+    source_path: taskfiles/nix/Taskfile.yml
+  - destination_module: uv
+    path: taskotter/uv/README.md
+    sha256: 2fbda7c71da98312459154aebff9bb6f4f1edd7985b6f8fedfd988dd9c26af7a
+    source_module: uv
+    source_path: taskfiles/uv/README.md
+  - destination_module: uv
+    path: taskotter/uv/Taskfile.yml
+    sha256: 6ad462d760f1f51d5cdc84b80e245344a60dc4e15f77e2c1ae4c672fce7f2521
+    source_module: uv
+    source_path: taskfiles/uv/Taskfile.yml
+  - destination_module: winget
+    path: taskotter/winget/README.md
+    sha256: 20b89e4fde23c67cca2c1733cbbaa327b9d760e7bd98421bf60ee651eaa1d7ab
+    source_module: winget
+    source_path: taskfiles/winget/README.md
+  - destination_module: winget
+    path: taskotter/winget/Taskfile.yml
+    sha256: 3f79c0e7b6d0790b9596495e298c9889505d513b081405d0b3d5bd11d0b80cfd
+    source_module: winget
+    source_path: taskfiles/winget/Taskfile.yml
+  - destination_module: yamlfix
+    path: taskotter/yamlfix/README.md
+    sha256: 2b89f05803d15c3327280a705fbaeb4e29c9d2329f7ff8454aef1915d972096d
+    source_module: yamlfix
+    source_path: taskfiles/yamlfix/README.md
+  - destination_module: yamlfix
+    path: taskotter/yamlfix/Taskfile.yml
+    sha256: 8bc28c7626a8c023606a82784f749533ece58ec3c4769f35ea8d70c41884d8bd
+    source_module: yamlfix
+    source_path: taskfiles/yamlfix/Taskfile.yml
+  - destination_module: yamllint
+    path: taskotter/yamllint/README.md
+    sha256: 5a65dc55bc061bcc410fa43fb89242b07289f13622d6dd2d5ffe4d2a4ba46687
+    source_module: yamllint
+    source_path: taskfiles/yamllint/README.md
+  - destination_module: yamllint
+    path: taskotter/yamllint/Taskfile.yml
+    sha256: a1799f84a0aeed47e1d63815f599d1f4cc3fd562c2e24b232abc1eaa303694c9
+    source_module: yamllint
+    source_path: taskfiles/yamllint/Taskfile.yml
+  - destination_module: zizmor
+    path: taskotter/zizmor/README.md
+    sha256: b3500bacaf19a506b5e80ffff7b9eceecdb08d586ba4fbe92072c6aca48bdf1e
+    source_module: zizmor
+    source_path: taskfiles/zizmor/README.md
+  - destination_module: zizmor
+    path: taskotter/zizmor/Taskfile.yml
+    sha256: de72568a1a4eba12f12b643917c2b212f11ba672821b6e97f2b9cf8dc4119835
+    source_module: zizmor
+    source_path: taskfiles/zizmor/Taskfile.yml
+resolved_modules:
+  dependencies:
+    - destination_module: cargo
+      path: taskotter/cargo
+      source_module: cargo
+    - destination_module: nix
+      path: taskotter/nix
+      source_module: nix
+    - destination_module: uv
+      path: taskotter/uv
+      source_module: uv
+    - destination_module: winget
+      path: taskotter/winget
+      source_module: winget
+  requested:
+    actionlint:
+      destination_module: actionlint
+      path: taskotter/actionlint
+      source_module: actionlint
+    adrs:
+      destination_module: adrs
+      path: taskotter/adrs
+      source_module: adrs
+    go:
+      destination_module: go
+      path: taskotter/go
+      source_module: go
+    golangci-lint:
+      destination_module: golangci-lint
+      path: taskotter/golangci-lint
+      source_module: golangci-lint
+    yamlfix:
+      destination_module: yamlfix
+      path: taskotter/yamlfix
+      source_module: yamlfix
+    yamllint:
+      destination_module: yamllint
+      path: taskotter/yamllint
+      source_module: yamllint
+    zizmor:
+      destination_module: zizmor
+      path: taskotter/zizmor
+      source_module: zizmor
+source:
+  default_branch: main
+  repository: task-otter/store
+  requested_version: v0.0.16
+  resolved_commit: 64523dfa96c77488952315ba780aa50f176cd171
+  source_ref: refs/tags/v0.0.16

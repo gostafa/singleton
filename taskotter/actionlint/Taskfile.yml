@@ -1,0 +1,132 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  winget:
+    taskfile: ../winget/Taskfile.yml
+
+vars:
+  ACTIONLINT_NIX_INSTALLABLE: '{{.ACTIONLINT_NIX_INSTALLABLE | default "nixpkgs#actionlint"}}'
+  ACTIONLINT_WINGET_INSTALLABLE: '{{.ACTIONLINT_WINGET_INSTALLABLE | default "rhysd.actionlint"}}'
+  ACTIONLINT_EXTRA_ARGS: '{{.ACTIONLINT_EXTRA_ARGS | default ""}}'
+  ACTIONLINT_TARGETS: '{{.ACTIONLINT_TARGETS | default ""}}'
+
+tasks:
+  default:
+    run: once
+    desc: Show available actionlint automation tasks
+    summary: Display the list of available actionlint-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install actionlint via Nix (Unix) or WinGet (Windows)
+    summary: |
+      Install actionlint on Linux and macOS via the user Nix profile, and on
+      Windows via WinGet, when it is not already on PATH. Override
+      ACTIONLINT_NIX_INSTALLABLE or ACTIONLINT_WINGET_INSTALLABLE to pin a
+      different package or version.
+    status:
+      - command -v actionlint >/dev/null 2>&1
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.ACTIONLINT_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - task: winget:install:package
+        vars:
+          WINGET_INSTALLABLE: '{{.ACTIONLINT_WINGET_INSTALLABLE}}'
+  version:
+    run: once
+    desc: Show the active actionlint version
+    summary: |
+      Print the version reported by the actionlint binary resolved from PATH.
+      Auto-installs actionlint if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  ci:
+    run: once
+    desc: Lint GitHub Actions workflow files with actionlint
+    summary: |
+      Run actionlint against workflow files. When ACTIONLINT_TARGETS is empty
+      actionlint automatically discovers all .github/workflows files. Pass
+      explicit paths to check specific workflows. Pass ACTIONLINT_EXTRA_ARGS
+      for additional flags such as -ignore or -format, or CLI arguments after
+      -- to override targets and options. Auto-installs actionlint if missing.
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: install
+    cmds:
+      - cmd: |
+          bash -lc '{{.NIX_LOAD}}; exec bash -s' <<'ACTIONLINT_EOF'
+          actionlint \
+            {{if .CLI_ARGS}}{{.CLI_ARGS}} \
+            {{else}}{{.ACTIONLINT_EXTRA_ARGS}} \
+            {{.ACTIONLINT_TARGETS}}{{end}} \
+            && echo "✅ actionlint passed" || { echo "❌ actionlint failed"; exit 1; }
+          ACTIONLINT_EOF
+        platforms:
+          - linux
+          - darwin
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}};
+          actionlint {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}
+            {{.ACTIONLINT_EXTRA_ARGS}}
+            {{.ACTIONLINT_TARGETS}}{{end}};
+          exit \$LASTEXITCODE"
+        platforms:
+          - windows
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show actionlint version on macOS or Linux
+    summary: Print the actionlint version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; actionlint -version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show actionlint version on Windows
+    summary: Print the actionlint version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}};
+          if (Get-Command actionlint -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: actionlint is not installed or not available in PATH.
+    cmds:
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; actionlint -version; exit \$LASTEXITCODE"

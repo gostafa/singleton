@@ -1,0 +1,281 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  winget:
+    taskfile: ../winget/Taskfile.yml
+
+vars:
+  UV_NIX_INSTALLABLE: '{{.UV_NIX_INSTALLABLE | default "nixpkgs#uv"}}'
+  UV_WINGET_INSTALLABLE: '{{.UV_WINGET_INSTALLABLE | default "astral-sh.uv"}}'
+  # \$ so Task's POSIX shell (mvdan/sh) leaves literal $ for PowerShell.
+  # Reload User Path and prepend %USERPROFILE%\.local\bin so uv and
+  # uv-installed tools from earlier in this Task process are visible.
+  UV_LOAD: >-
+    {{.UV_LOAD | default `
+    \$u = [Environment]::GetEnvironmentVariable('Path', 'User');
+    if (\$u) { \$env:Path = \$u + ';' + \$env:Path };
+    \$localBin = Join-Path \$env:USERPROFILE '.local\bin';
+    if (Test-Path -LiteralPath \$localBin) { \$env:Path = \$localBin + ';' + \$env:Path }
+    `}}
+  UV_VENV: '{{.UV_VENV | default ".venv"}}'
+  UV_REQUIREMENTS: '{{.UV_REQUIREMENTS | default "requirements.txt"}}'
+  UV_FILE: '{{.UV_FILE | default ""}}'
+  UV_ARGS: '{{.UV_ARGS | default ""}}'
+  UV_EXTRA_ARGS: '{{.UV_EXTRA_ARGS | default ""}}'
+  PYTHON_VERSION: '{{.PYTHON_VERSION | default ""}}'
+  UV_TOOL: '{{.UV_TOOL | default ""}}'
+
+tasks:
+  default:
+    run: once
+    desc: Show available uv automation tasks
+    summary: Display the list of available uv-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install uv via Nix (Unix) or WinGet (Windows)
+    summary: |
+      Install uv on Linux and macOS via the user Nix profile, and on
+      Windows via WinGet, when it is not already on PATH. Override
+      UV_NIX_INSTALLABLE or UV_WINGET_INSTALLABLE to pin a
+      different package or version.
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.UV_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - task: winget:install:package
+        vars:
+          WINGET_INSTALLABLE: '{{.UV_WINGET_INSTALLABLE}}'
+  version:
+    run: once
+    desc: Show the active uv version
+    summary: |
+      Print the version reported by the uv binary resolved from PATH.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  python:install:
+    run: once
+    desc: Install a Python version with uv (PYTHON_VERSION=3.x)
+    summary: |
+      Install the specified Python version via uv python install.
+      Pass PYTHON_VERSION to select the version, e.g. PYTHON_VERSION=3.12.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    requires:
+      vars:
+        - PYTHON_VERSION
+    preconditions:
+      - sh: test -n "{{.PYTHON_VERSION}}"
+        msg: PYTHON_VERSION is required. Pass PYTHON_VERSION=3.12 when running this task.
+    cmds:
+      - task: _uv:unix
+        vars:
+          UV_ARGS: >-
+            python install
+            {{.PYTHON_VERSION}}
+      - task: _uv:windows
+        vars:
+          UV_ARGS: >-
+            python install
+            {{.PYTHON_VERSION}}
+  venv:
+    run: once
+    desc: Create a Python virtual environment with uv (UV_VENV=path)
+    summary: |
+      Create a virtual environment at UV_VENV (default .venv) using uv venv.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _uv:unix
+        vars:
+          UV_ARGS: venv "{{.UV_VENV}}" {{.UV_EXTRA_ARGS}}
+      - task: _uv:windows
+        vars:
+          UV_ARGS: venv '{{.UV_VENV}}' {{.UV_EXTRA_ARGS}}
+  pip:install:
+    run: once
+    desc: Install packages from a requirements file with uv (UV_REQUIREMENTS=path)
+    summary: |
+      Run uv pip install -r UV_REQUIREMENTS (default requirements.txt).
+      Pass UV_EXTRA_ARGS for additional flags such as --upgrade or --no-cache.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _uv:unix
+        vars:
+          UV_ARGS: pip install -r "{{.UV_REQUIREMENTS}}" {{.UV_EXTRA_ARGS}}
+      - task: _uv:windows
+        vars:
+          UV_ARGS: pip install -r '{{.UV_REQUIREMENTS}}' {{.UV_EXTRA_ARGS}}
+  run:
+    run: once
+    desc: Run a script or command with uv (UV_FILE=path)
+    summary: |
+      Execute UV_FILE via uv run, which automatically manages the virtual environment.
+      Pass UV_ARGS for positional arguments and UV_EXTRA_ARGS for uv flags.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    requires:
+      vars:
+        - UV_FILE
+    preconditions:
+      - sh: test -n "{{.UV_FILE}}"
+        msg: UV_FILE is required. Pass UV_FILE=path/to/script.py when running this task.
+    cmds:
+      - task: _uv:unix
+        vars:
+          UV_ARGS: >-
+            run "{{.UV_FILE}}"
+            {{.UV_ARGS}}
+            {{.UV_EXTRA_ARGS}}
+      - task: _uv:windows
+        vars:
+          UV_ARGS: >-
+            run '{{.UV_FILE}}'
+            {{.UV_ARGS}}
+            {{.UV_EXTRA_ARGS}}
+  tool:install:
+    run: once
+    desc: Install a tool into an isolated environment with uv (UV_TOOL=name)
+    summary: |
+      Run uv tool install TOOL to install a Python tool (e.g. yamllint, ruff)
+      into an isolated environment with its shim added to PATH.
+      Pass UV_EXTRA_ARGS for additional flags such as --upgrade.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    requires:
+      vars:
+        - UV_TOOL
+    preconditions:
+      - sh: test -n "{{.UV_TOOL}}"
+        msg: TOOL is required. Pass UV_TOOL=name when running this task.
+    cmds:
+      - task: _uv:unix
+        vars:
+          UV_ARGS: >-
+            tool install
+            "{{.UV_TOOL}}"
+            {{.UV_EXTRA_ARGS}}
+      - task: _uv:windows
+        vars:
+          UV_ARGS: >-
+            tool install
+            '{{.UV_TOOL}}'
+            {{.UV_EXTRA_ARGS}}
+  tool:upgrade:
+    run: once
+    desc: Upgrade an installed uv tool (UV_TOOL=name)
+    summary: |
+      Run uv tool upgrade TOOL to upgrade a previously installed tool to its
+      latest release. Pass UV_EXTRA_ARGS for additional flags.
+      Auto-installs uv if missing.
+    deps:
+      - task: install
+    requires:
+      vars:
+        - UV_TOOL
+    preconditions:
+      - sh: test -n "{{.UV_TOOL}}"
+        msg: TOOL is required. Pass UV_TOOL=name when running this task.
+    cmds:
+      - task: _uv:unix
+        vars:
+          UV_ARGS: >-
+            tool upgrade
+            "{{.UV_TOOL}}"
+            {{.UV_EXTRA_ARGS}}
+      - task: _uv:windows
+        vars:
+          UV_ARGS: >-
+            tool upgrade
+            '{{.UV_TOOL}}'
+            {{.UV_EXTRA_ARGS}}
+  _uv:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    set:
+      - errexit
+      - nounset
+      - pipefail
+    requires:
+      vars:
+        - UV_ARGS
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; uv {{.UV_ARGS}}'
+  _uv:windows:
+    internal: true
+    platforms:
+      - windows
+    requires:
+      vars:
+        - UV_ARGS
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.UV_LOAD}};
+        uv {{.UV_ARGS}};
+        exit \$LASTEXITCODE"
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show uv version on macOS or Linux
+    summary: Print the uv version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; uv --version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show uv version on Windows
+    summary: Print the uv version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.UV_LOAD}};
+          if (Get-Command uv -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: uv is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.UV_LOAD}}; uv --version; exit \$LASTEXITCODE"
