@@ -1,11 +1,16 @@
 ---
 version: '2'
+
 run:
   timeout: 10m
+
 linters:
   default: all
-  disable: [wsl, gomodguard]
-  enable: [gomodguard_v2]
+  disable:
+    - wsl
+    - gomodguard
+  enable:
+    - gomodguard_v2
   settings:
     depguard:
       rules:
@@ -15,7 +20,12 @@ linters:
             - pkg: math/rand
               desc: use math/rand/v2
     ireturn:
-      allow: [error, empty, anon, stdlib, generic]
+      allow:
+        - error
+        - empty
+        - anon
+        - stdlib
+        - generic
     cyclop:
       max-complexity: 5
       package-average: 5.0
@@ -25,9 +35,16 @@ linters:
       branch-max-lines: 2
     varnamelen:
       # Conventional short names that are clearer than a verbose alternative.
-      ignore-names: [tx, db, id, ok]
+      ignore-names:
+        - tx
+        - db
+        - id
+        - ok
     tagalign:
-      order: [json, exhaustruct]
+      order:
+        - json
+        - exhaustruct
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
