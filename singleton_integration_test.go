@@ -215,8 +215,8 @@ func TestPublicPermanentErrorsStopRetrying(t *testing.T) {
 
 			assertEqual(t, "value", value, 0)
 			assertEqual(t, "attempts", attempts.Load(), uint32(1))
-			assertEqual(t, "reason", initErr.Reason, singleton.FailurePermanent)
-			assertEqual(t, "factory error", initErr.Err, errFactory)
+			assertEqual(t, "reason", initErr.Reason(), singleton.FailurePermanent)
+			assertEqual(t, "factory error", initErr.Err(), errFactory)
 			assertErrorIs(t, err, singleton.ErrPermanent)
 			assertErrorIs(t, err, errFactory)
 		})
@@ -240,8 +240,8 @@ func TestPublicInitErrorIsCachedAndReset(t *testing.T) {
 	initErr := asInitError(t, err)
 
 	assertEqual(t, "value", value, 0)
-	assertEqual(t, "factory error", initErr.Err, errFactory)
-	assertEqual(t, "reason", initErr.Reason, singleton.FailureExhausted)
+	assertEqual(t, "factory error", initErr.Err(), errFactory)
+	assertEqual(t, "reason", initErr.Reason(), singleton.FailureExhausted)
 	assertErrorIs(t, err, singleton.ErrRetriesExhausted)
 	assertErrorIs(t, err, errFactory)
 
@@ -277,8 +277,8 @@ func TestPublicInitializationTimeout(t *testing.T) {
 	initErr := asInitError(t, err)
 
 	assertEqual(t, "value", value, 0)
-	assertEqual(t, "reason", initErr.Reason, singleton.FailureTimedOut)
-	assertEqual(t, "factory error", initErr.Err, errFactory)
+	assertEqual(t, "reason", initErr.Reason(), singleton.FailureTimedOut)
+	assertEqual(t, "factory error", initErr.Err(), errFactory)
 	assertErrorIs(t, err, context.DeadlineExceeded)
 	assertErrorIs(t, err, errFactory)
 }
@@ -293,7 +293,7 @@ func TestPublicReasonDoesNotComeFromFactoryError(t *testing.T) {
 	_, err := provider.Get(t.Context())
 	initErr := asInitError(t, err)
 
-	if initErr.Reason != singleton.FailureExhausted ||
+	if initErr.Reason() != singleton.FailureExhausted ||
 		!errors.Is(
 			err,
 			singleton.ErrRetriesExhausted,
@@ -352,10 +352,10 @@ func TestPublicObserverPanicIsDiscarded(t *testing.T) {
 	}
 }
 
-func TestPublicInitErrorLiteral(t *testing.T) {
+func TestPublicInitErrorConstructor(t *testing.T) {
 	t.Parallel()
 
-	initErr := &singleton.InitError{Reason: singleton.FailureExhausted, Err: errFactory}
+	initErr := singleton.NewInitError(singleton.FailureExhausted, errFactory)
 	if initErr.Error() != "singleton: retries exhausted: factory failed" ||
 		!errors.Is(initErr, errFactory) || errors.Unwrap(initErr) != nil {
 
@@ -608,8 +608,8 @@ func TestPermanentStopsRetryingAtTheFirstAttempt(t *testing.T) {
 	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != singleton.FailurePermanent {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, singleton.FailurePermanent)
+	if initErr.Reason() != singleton.FailurePermanent {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), singleton.FailurePermanent)
 	}
 
 	if !errors.Is(err, errFatal) {
@@ -631,8 +631,8 @@ func TestGetReportsAnExhaustedBudget(t *testing.T) {
 	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != singleton.FailureExhausted {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, singleton.FailureExhausted)
+	if initErr.Reason() != singleton.FailureExhausted {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), singleton.FailureExhausted)
 	}
 
 	if !errors.Is(err, errBoom) {
@@ -687,8 +687,8 @@ func TestGetReportsTheInitializationTimeout(t *testing.T) {
 	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != singleton.FailureTimedOut {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, singleton.FailureTimedOut)
+	if initErr.Reason() != singleton.FailureTimedOut {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), singleton.FailureTimedOut)
 	}
 }
 
@@ -709,8 +709,8 @@ func TestNewMakesTheRetryObserverPanicSafe(t *testing.T) {
 	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != singleton.FailureExhausted {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, singleton.FailureExhausted)
+	if initErr.Reason() != singleton.FailureExhausted {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), singleton.FailureExhausted)
 	}
 
 	if events.Load() != 2 {

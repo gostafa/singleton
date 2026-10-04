@@ -14,13 +14,13 @@ import (
 
 var errBoom = errors.New("boom")
 
-func requireInitError(t *testing.T, err error) *domain.InitError {
+func requireInitError(t *testing.T, err error) domain.InitError {
 	t.Helper()
 
-	var initErr *domain.InitError
+	var initErr domain.InitError
 
 	if !errors.As(err, &initErr) {
-		t.Fatalf("errors.As(%v, *domain.InitError) = false, want true", err)
+		t.Fatalf("errors.As(%v, domain.InitError) = false, want true", err)
 	}
 
 	return initErr
@@ -61,12 +61,12 @@ func TestTranslateClassifiesByTheStopCondition(t *testing.T) {
 			t.Parallel()
 
 			initErr := requireInitError(t, translate(test.err))
-			if initErr.Reason != test.want {
-				t.Errorf("Reason = %v, want %v", initErr.Reason, test.want)
+			if initErr.Reason() != test.want {
+				t.Errorf("Reason = %v, want %v", initErr.Reason(), test.want)
 			}
 
-			if !errors.Is(initErr.Err, errBoom) {
-				t.Errorf("Err = %v, want %v", initErr.Err, errBoom)
+			if !errors.Is(initErr.Err(), errBoom) {
+				t.Errorf("Err = %v, want %v", initErr.Err(), errBoom)
 			}
 		})
 	}

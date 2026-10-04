@@ -35,13 +35,13 @@ func fastConfig(
 	}
 }
 
-func requireInitError(t *testing.T, err error) *domain.InitError {
+func requireInitError(t *testing.T, err error) domain.InitError {
 	t.Helper()
 
-	var initErr *domain.InitError
+	var initErr domain.InitError
 
 	if !errors.As(err, &initErr) {
-		t.Fatalf("errors.As(%v, *domain.InitError) = false, want true", err)
+		t.Fatalf("errors.As(%v, domain.InitError) = false, want true", err)
 	}
 
 	return initErr
@@ -160,12 +160,12 @@ func TestDoReportsAnExhaustedAttemptBudget(t *testing.T) {
 	}
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != domain.FailureExhausted {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, domain.FailureExhausted)
+	if initErr.Reason() != domain.FailureExhausted {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), domain.FailureExhausted)
 	}
 
-	if !errors.Is(initErr.Err, errBoom) {
-		t.Errorf("Err = %v, want %v", initErr.Err, errBoom)
+	if !errors.Is(initErr.Err(), errBoom) {
+		t.Errorf("Err = %v, want %v", initErr.Err(), errBoom)
 	}
 }
 
@@ -178,7 +178,7 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 		Do(t.Context(), func(context.Context) (int, error) {
 			calls++
 
-			return 3, fmt.Errorf("dial: %w", domain.Permanent(errFatal))
+			return 3, fmt.Errorf("dial: %w", backoffretry.Permanent(errFatal))
 		})
 
 	if calls != 1 {
@@ -186,12 +186,12 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 	}
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != domain.FailurePermanent {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, domain.FailurePermanent)
+	if initErr.Reason() != domain.FailurePermanent {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), domain.FailurePermanent)
 	}
 
-	if !errors.Is(initErr.Err, errFatal) {
-		t.Errorf("Err = %v, want %v", initErr.Err, errFatal)
+	if !errors.Is(initErr.Err(), errFatal) {
+		t.Errorf("Err = %v, want %v", initErr.Err(), errFatal)
 	}
 }
 
@@ -206,8 +206,8 @@ func TestDoReportsItsOwnTimeout(t *testing.T) {
 		})
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != domain.FailureTimedOut {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, domain.FailureTimedOut)
+	if initErr.Reason() != domain.FailureTimedOut {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), domain.FailureTimedOut)
 	}
 }
 
@@ -227,7 +227,7 @@ func TestDoReportsACancelledParentContext(t *testing.T) {
 		})
 
 	initErr := requireInitError(t, err)
-	if initErr.Reason != domain.FailureCanceled {
-		t.Errorf("Reason = %v, want %v", initErr.Reason, domain.FailureCanceled)
+	if initErr.Reason() != domain.FailureCanceled {
+		t.Errorf("Reason = %v, want %v", initErr.Reason(), domain.FailureCanceled)
 	}
 }

@@ -7,40 +7,38 @@ import (
 	"time"
 )
 
-// FailureReason explains why initialization stopped.
-type FailureReason uint8
+type (
+	// FailureReason identifies the retry policy's stop condition.
+	FailureReason = uint8
 
-// InitError reports that shared initialization failed.
-//
-// Classify a failure with Reason, not with errors.Is. [InitError.Unwrap]
-// deliberately exposes both the factory error and the reason retrying stopped,
-// so errors.Is answers whether an error appears anywhere in the chain — a
-// different question from why initialization stopped. A factory that fails
-// with context.DeadlineExceeded on every attempt exhausts its retry budget, so
-// Reason is [FailureExhausted] even though errors.Is reports a match for
-// context.DeadlineExceeded.
-//
-// Build one with [NewInitError].
-type InitError struct {
-	Err    error
-	chain  []error
-	Reason FailureReason
-}
+	// InitError exposes a classified initialization failure.
+	InitError interface {
+		error
+		// Err returns the final factory error.
+		Err() error
+		// Reason returns the policy's stop condition.
+		Reason() FailureReason
+		// Unwrap exposes the factory error and stop condition.
+		Unwrap() []error
+	}
 
-// PermanentError marks a factory error as non-retriable.
-//
-// A retry adapter detects it with errors.As and stops immediately.
-type PermanentError struct {
-	// Err is the wrapped, non-retriable error.
-	Err error
-}
+	// PermanentError marks an error that must not be retried.
+	PermanentError interface {
+		error
+		// PermanentCause returns the non-retriable factory error.
+		PermanentCause() error
+	}
 
-// RetryEvent describes a failed attempt that will be retried.
-type RetryEvent struct {
-	Err       error
-	Attempt   uint
-	NextDelay time.Duration
-}
+	// RetryEvent is the data delivered between attempts.
+	RetryEvent = struct {
+		// Err is the failed attempt's error.
+		Err error
+		// Attempt counts attempts starting at one.
+		Attempt uint
+		// NextDelay is the wait before retrying.
+		NextDelay time.Duration
+	}
 
-// RetryObserver receives one event per retried attempt.
-type RetryObserver func(RetryEvent)
+	// RetryObserver receives one event per retried attempt.
+	RetryObserver = func(RetryEvent)
+)

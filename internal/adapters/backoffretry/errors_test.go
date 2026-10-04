@@ -1,12 +1,14 @@
 // Gostafa 2026.
 // SPDX-License-Identifier: Apache-2.0.
 
-package domain
+package backoffretry
 
 import (
 	"errors"
 	"slices"
 	"testing"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 var errFactory = errors.New("factory failed")
@@ -21,15 +23,24 @@ func TestInitErrorUnwrapFallsBackToErrWithoutAChain(t *testing.T) {
 
 	// NewInitError always fills the chain, so a bare struct literal is the only
 	// way to reach the fallback.
-	initErr := &InitError{Reason: FailureExhausted, Err: errFactory, chain: nil}
+	initErr := &InitError{details: failureDetails{reason: domain.FailureExhausted, err: errFactory}}
 
 	if got := initErr.Unwrap(); !sameErrors(got, []error{errFactory}) {
 		t.Errorf("Unwrap() = %v, want [%v]", got, errFactory)
 	}
 
-	empty := &InitError{Reason: FailureExhausted, Err: nil, chain: nil}
+	empty := &InitError{details: failureDetails{reason: domain.FailureExhausted}}
 
 	if got := empty.Unwrap(); got != nil {
 		t.Errorf("Unwrap() = %v, want nil", got)
+	}
+}
+
+func TestReasonNameHandlesUnknownValues(t *testing.T) {
+	t.Parallel()
+	for _, reason := range []domain.FailureReason{0, 200} {
+		if got := reasonName(reason); got != "initialization failed" {
+			t.Errorf("reasonName(%d) = %q", reason, got)
+		}
 	}
 }

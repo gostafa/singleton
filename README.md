@@ -57,7 +57,7 @@ go get github.com/mostafakhairy0305-dot/singleton
 import "github.com/mostafakhairy0305-dot/singleton"
 ```
 
-**Requires Go 1.24+** (generic type aliases). One dependency: [`cenkalti/backoff/v7`](https://github.com/cenkalti/backoff), fully quarantined behind an internal adapter — none of its types appear in this package's API.
+**Requires Go 1.26.6+**. One dependency: [`cenkalti/backoff/v7`](https://github.com/cenkalti/backoff), fully quarantined behind an internal adapter — none of its types appear in this package's API.
 
 ## Quick start
 
@@ -171,20 +171,20 @@ var db = singleton.MustNew(func(ctx context.Context) (*pgxpool.Pool, error) {
 
 ### Classifying failures
 
-Branch on `Reason` — **not** on `errors.Is`. See [Gotchas](#classify-with-reason-not-errorsis).
+Branch on `Reason()` — **not** on `errors.Is`. See [Gotchas](#classify-with-reason-not-errorsis).
 
 ```go
 client, err := provider.Get(ctx)
 if err != nil {
     var initErr *singleton.InitError
     if errors.As(err, &initErr) {
-        switch initErr.Reason {
+        switch initErr.Reason() {
         case singleton.FailurePermanent:
-            log.Error("misconfigured, not retrying", "err", initErr.Err)
+            log.Error("misconfigured, not retrying", "err", initErr.Err())
         case singleton.FailureExhausted:
-            log.Warn("dependency down, retry budget spent", "err", initErr.Err)
+            log.Warn("dependency down, retry budget spent", "err", initErr.Err())
         case singleton.FailureTimedOut:
-            log.Warn("initialization exceeded its deadline", "err", initErr.Err)
+            log.Warn("initialization exceeded its deadline", "err", initErr.Err())
         }
 
         return err
@@ -241,7 +241,7 @@ func (h *Health) Check(ctx context.Context) error {
 
     if _, err := h.db.Get(ctx); err != nil {
         var initErr *singleton.InitError
-        if errors.As(err, &initErr) && initErr.Reason != singleton.FailurePermanent {
+        if errors.As(err, &initErr) && initErr.Reason() != singleton.FailurePermanent {
             h.db.Reset()   // transient — let the next check re-dial
         }
 
@@ -298,7 +298,7 @@ Same as `New`, panicking instead of returning an error. Intended for package-lev
 func Permanent(err error) error
 ```
 
-Marks a factory error as non-retriable. Initialization stops at that attempt with `Reason == FailurePermanent`. `Permanent(nil)` returns `nil`. The wrapped error stays reachable through `errors.Is` / `errors.As`.
+Marks a factory error as non-retriable. Initialization stops at that attempt with `Reason() == FailurePermanent`. `Permanent(nil)` returns `nil`. The wrapped error stays reachable through `errors.Is` / `errors.As`.
 
 The concrete result is a `*PermanentError`, which callers can inspect with `errors.As`. A factory may also return a `*PermanentError` directly, including wrapped in another error.
 
@@ -315,7 +315,7 @@ Use `errors.Is` to match construction errors returned by `New` or panicked by `M
 | `ErrZeroInitialInterval` | The initial retry interval is not positive |
 | `ErrMaxIntervalBelowInitial` | The maximum retry interval is less than the initial interval |
 
-`InitError.Unwrap` exposes the factory error and a public stop error: `ErrPermanent`, `ErrRetriesExhausted`, `context.DeadlineExceeded`, or `context.Canceled`. Retry-library stop errors stay internal; callers that previously matched them should use these public equivalents. Classify initialization with `InitError.Reason` because a factory error can also match a stop error.
+`InitError.Unwrap` exposes the factory error and a public stop error: `ErrPermanent`, `ErrRetriesExhausted`, `context.DeadlineExceeded`, or `context.Canceled`. Retry-library stop errors stay internal; callers that previously matched them should use these public equivalents. Classify initialization with `InitError.Reason()` because a factory error can also match a stop error.
 
 ### `type Provider`
 
@@ -374,10 +374,11 @@ Creates the singleton value. The context is **owned by this package** — it car
 ### `type InitError`
 
 ```go
-type InitError struct {
-    Reason FailureReason
-    Err    error   // the last error the factory returned
-}
+type InitError struct { /* unexported */ }
+
+func NewInitError(reason FailureReason, err error) *InitError
+func (e *InitError) Reason() FailureReason
+func (e *InitError) Err() error
 
 func (e *InitError) Error() string
 func (e *InitError) Unwrap() []error
@@ -396,7 +397,9 @@ errors.Is(err, singleton.ErrRetriesExhausted) // true, for an exhausted budget
 errors.Unwrap(err)                           // nil — this is a multi-error Unwrap
 ```
 
-Repeated `Get` calls return the same cached `*InitError` until `Reset`. A manually constructed `InitError` unwraps only its `Err` field.
+Repeated `Get` calls return the same cached `*InitError` until `Reset`. `NewInitError(reason, err)` constructs a standalone failure that unwraps only `err`. The zero value unwraps no errors.
+
+Migration: replace `initErr.Reason` and `initErr.Err` field reads with `initErr.Reason()` and `initErr.Err()`. Replace `&InitError{Reason: reason, Err: err}` with `NewInitError(reason, err)`. The fields are now private so callers cannot overwrite a cached failure shared with other goroutines.
 
 ### `type PermanentError`
 
@@ -481,11 +484,11 @@ reason   = retries exhausted
 A factory doing network I/O under a per-attempt deadline returns `context.DeadlineExceeded` every time. After the budget is spent:
 
 ```go
-initErr.Reason                            // FailureExhausted — correct
+initErr.Reason()                            // FailureExhausted — correct
 errors.Is(err, context.DeadlineExceeded)  // ALSO true — the factory's error
 ```
 
-`Reason` is the authoritative classification. Reserve `errors.Is` for matching your own sentinel errors.
+`Reason()` is the authoritative classification. Reserve `errors.Is` for matching your own sentinel errors.
 
 ### The factory owns its cleanup
 
@@ -505,22 +508,21 @@ The initialization context descends from `context.Background()` with only a time
 
 ### Inspecting permanent errors
 
-`Permanent(err)` returns a public `*PermanentError`. Inspect the marker with `errors.As`, match its wrapped error with `errors.Is`, or read `InitError.Reason` after initialization stops. The final initialization error preserves the marker's wrapped error in `InitError.Err`.
+`Permanent(err)` returns a public `*PermanentError`. Inspect the marker with `errors.As`, match its wrapped error with `errors.Is`, or read `InitError.Reason()` after initialization stops. The final initialization error preserves the marker's wrapped error in `InitError.Err()`.
 
 ## Architecture
 
 Ports and adapters, with everything but the facade under `internal/`:
 
 ```
-singleton.go                       Provider facade, Factory, Interface, New/MustNew
-errors.go                          public failure types and error values
-retry.go                           RetryEvent and private boundary conversions
-options.go                         Option and the four With* constructors
+types.go                           public types and private boundary state
+funcs.go                           facade, options, error accessors and conversions
+consts.go, vars.go                  defaults, failure reasons and error values
 internal/
-  domain/                          value types — stdlib only
-  ports/retrier.go                 the outbound Retrier port
-  application/provider.go          lazy single-flight state machine
-  adapters/backoffretry/           the only package importing a retry engine
+  domain/                          failure contracts and retry event payloads
+  ports/                           the outbound Retrier port
+  application/                     lazy single-flight state machine
+  adapters/backoffretry/           retry engine and concrete internal failures
 ```
 
 Public types are defined in `singleton` and reference only public or standard-library types in their exported fields and signatures. Private adapters translate permanent markers, retry events, and initialization failures between this API and the internal implementation. Failures are converted before caching so callers share one public error instance.

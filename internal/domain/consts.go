@@ -5,7 +5,7 @@ package domain
 
 const (
 	// FailurePermanent means the factory returned an error wrapped with
-	// [Permanent], so no further attempts were made.
+	// [PermanentError], so no further attempts were made.
 	FailurePermanent FailureReason = iota + 1
 
 	// FailureExhausted means the attempt budget ran out.
@@ -17,7 +17,3 @@ const (
 	// FailureCanceled means the initialization context was canceled.
 	FailureCanceled
 )
-
-// chainCapacity is how many errors an [InitError] can unwrap to: the factory
-// error and the retry policy's stop condition.
-const chainCapacity = 2

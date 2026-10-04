@@ -316,6 +316,7 @@ linters:
     ireturn:
       allow:
         - error
+        - generic
     lll:
       line-length: 120
       tab-width: 2
@@ -676,6 +677,7 @@ linters:
         - assign-expr
       disable: []
   exclusions:
+    paths: [.*_test.go]
     generated: disable
     warn-unused: true
 

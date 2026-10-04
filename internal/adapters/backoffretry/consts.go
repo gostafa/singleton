@@ -3,7 +3,12 @@
 
 package backoffretry
 
+import (
+	"time"
+)
+
 const (
+	noDuration          = 0 * time.Second
 	multiplier          = 2
 	randomizationFactor = 0.2
 )

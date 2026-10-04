@@ -21,9 +21,8 @@ const (
 	// FailureCanceled means the initialization context was canceled.
 	// No current code path produces it; it is reserved for a future shutdown hook.
 	FailureCanceled
-)
 
-const (
+	zeroAttempts           = 0
 	defaultMaxAttempts     = 5
 	defaultTimeout         = 30 * time.Second
 	defaultInitialInterval = 250 * time.Millisecond

@@ -36,7 +36,7 @@ func TestAbandonReturnsTheResultWhenInitializationWinsTheRace(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	got, err := current.abandon(ctx)
+	got, err := abandon(ctx, current)
 	if err != nil {
 		t.Fatalf("abandon() error = %v, want nil", err)
 	}
@@ -62,19 +62,36 @@ func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
 	existing.settled.Store(true)
 	close(existing.done)
 
-	provider.mu.Lock()
+	provider.lifecycle.mu.Lock()
 
 	loaded := make(chan *state[int], 1)
 
-	go func() { loaded <- provider.load() }()
+	go func() { loaded <- load(provider.lifecycle) }()
 
 	// The goroutine finds a nil state and parks on the held mutex; only then is
 	// there a state for it to discover on the second check.
 	time.Sleep(lockHandoff)
-	provider.current.Store(existing)
-	provider.mu.Unlock()
+	provider.lifecycle.current.Store(existing)
+	provider.lifecycle.mu.Unlock()
 
 	if got := <-loaded; got != existing {
 		t.Errorf("load() = %p, want the stored state %p", got, existing)
 	}
+}
+
+func TestResetZeroProviderDoesNothing(t *testing.T) {
+	t.Parallel()
+	var provider Provider[int]
+	provider.Reset()
+}
+
+func TestGetRejectsMissingFactory(t *testing.T) {
+	t.Parallel()
+	provider := NewProvider[int](nil, onceRetrier[int]{})
+	defer func() {
+		if got := recover(); got != uninitializedProvider {
+			t.Errorf("panic = %v, want %q", got, uninitializedProvider)
+		}
+	}()
+	_, _ = provider.Get(t.Context())
 }

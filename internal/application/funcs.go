@@ -11,16 +11,16 @@ import (
 )
 
 // NewProvider wires a factory to the retry policy that will drive it.
-func NewProvider[T any](
-	factory ports.Operation[T],
-	retrier ports.Retrier[T],
-) *Provider[T] {
-	provider := new(Provider[T])
+func NewProvider[Value any](
+	factory ports.Operation[Value],
+	retrier ports.Retrier[Value],
+) *Provider[Value] {
+	provider := new(lifecycle[Value])
 
 	provider.factory = factory
 	provider.retrier = retrier
 
-	return provider
+	return &Provider[Value]{lifecycle: provider}
 }
 
 // Get waits for and returns the shared value, starting initialization on the
@@ -31,27 +31,40 @@ func NewProvider[T any](
 // singleton for the entire process. A failed initialization is cached and
 // returned to every later caller until [Provider.Reset] is called.
 //
-// Get returns the zero T with an error wrapping context.Cause(ctx) if the
+// Get returns the zero Value with an error wrapping context.Cause(ctx) if the
 // caller's context ends before initialization settles, and re-panics with the
 // factory's panic value if the factory panicked. It panics if ctx is nil or if
 // the Provider is the zero value.
-func (p *Provider[T]) Get(ctx context.Context) (T, error) {
+func (provider *Provider[Value]) Get(ctx context.Context) (Value, error) {
+	//nolint:wrapcheck // Preserve the cached initialization error.
+	return get(ctx, provider.lifecycle)
+}
+
+func get[Value any](ctx context.Context, provider *lifecycle[Value]) (Value, error) {
 	if ctx == nil {
+		//nolint:forbidigo // Preserve the documented panic contract.
 		panic("singleton: nil context")
 	}
 
-	current := p.load()
+	current := load(provider)
+	//nolint:wrapcheck // Preserve the cached initialization error.
+	return wait(ctx, current)
+}
 
-	if current.settled.Load() {
-		return current.result()
+func wait[Value any](ctx context.Context, currentState *state[Value]) (Value, error) {
+	if currentState.settled.Load() {
+		//nolint:wrapcheck // Every caller receives the same cached error.
+		return result(currentState)
 	}
 
 	select {
-	case <-current.done:
-		return current.result()
+	case <-currentState.done:
+		//nolint:wrapcheck // Every caller receives the same cached error.
+		return result(currentState)
 
 	case <-ctx.Done():
-		return current.abandon(ctx)
+		//nolint:wrapcheck // The caller cancellation error already carries its context.
+		return abandon(ctx, currentState)
 	}
 }
 
@@ -61,57 +74,68 @@ func (p *Provider[T]) Get(ctx context.Context) (T, error) {
 // It does nothing while initialization is in progress, so callers already
 // waiting are never left on a discarded state, and nothing after a success,
 // because a live value other goroutines already hold must not be torn down.
-func (p *Provider[T]) Reset() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (provider *Provider[Value]) Reset() {
+	reset(provider.lifecycle)
+}
 
-	current := p.current.Load()
-	if current == nil {
+func reset[Value any](provider *lifecycle[Value]) {
+	if provider == nil {
 		return
 	}
 
-	if !current.settled.Load() {
-		return
-	}
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
 
-	if current.panicked || current.err != nil {
-		p.current.Store(nil)
+	current := provider.current.Load()
+	if canReset(current) {
+		provider.current.Store(nil)
 	}
 }
 
-func (p *Provider[T]) load() *state[T] {
-	if current := p.current.Load(); current != nil {
+func load[Value any](provider *lifecycle[Value]) *state[Value] {
+	if provider == nil {
+		//nolint:forbidigo // Preserve the documented zero-value panic.
+		panic(uninitializedProvider)
+	}
+
+	if current := provider.current.Load(); current != nil {
 		return current
 	}
 
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	provider.mu.Lock()
+	defer provider.mu.Unlock()
 
-	if current := p.current.Load(); current != nil {
+	if current := provider.current.Load(); current != nil {
 		return current
 	}
 
-	if p.factory == nil {
-		panic("singleton: Provider must be created with New or MustNew")
+	return start(provider)
+}
+
+func start[Value any](provider *lifecycle[Value]) *state[Value] {
+	if provider.factory == nil {
+		//nolint:forbidigo // Preserve the documented panic contract.
+		panic(uninitializedProvider)
 	}
 
-	current := new(state[T])
+	current := new(state[Value])
 
 	current.done = make(chan struct{})
 
-	p.current.Store(current)
+	provider.current.Store(current)
 
-	go p.initialize(current)
+	go initialize(provider, current)
 
 	return current
 }
 
-func (s *state[T]) result() (T, error) {
-	if s.panicked {
-		panic(s.panicValue)
+func result[Value any](currentState *state[Value]) (Value, error) {
+	if currentState.panicked {
+		//nolint:forbidigo // Preserve the documented panic contract.
+		panic(currentState.panicValue)
 	}
 
-	return s.value, s.err
+	return currentState.value, currentState.err
 }
 
 // abandon reports why this caller stopped waiting, unless initialization
@@ -120,12 +144,13 @@ func (s *state[T]) result() (T, error) {
 // The error wraps context.Cause(ctx), so a context.WithCancelCause reason
 // stays reachable through errors.Is and errors.As. It describes the caller's
 // own context rather than the singleton, which keeps initializing.
-func (s *state[T]) abandon(ctx context.Context) (T, error) {
-	if s.settled.Load() {
-		return s.result()
+func abandon[Value any](ctx context.Context, currentState *state[Value]) (Value, error) {
+	if currentState.settled.Load() {
+		//nolint:wrapcheck // Preserve cached error identity.
+		return result(currentState)
 	}
 
-	var zero T
+	var zero Value
 
 	return zero, fmt.Errorf(
 		"singleton: waiting for initialization: %w",
@@ -133,18 +158,10 @@ func (s *state[T]) abandon(ctx context.Context) (T, error) {
 	)
 }
 
-func (p *Provider[T]) initialize(current *state[T]) {
-	defer func() {
-		if value := recover(); value != nil {
-			current.panicked = true
-			current.panicValue = value
-		}
+func initialize[Value any](provider *lifecycle[Value], current *state[Value]) {
+	defer finish(current)
 
-		current.settled.Store(true)
-		close(current.done)
-	}()
-
-	value, err := p.retrier.Do(context.Background(), p.factory)
+	value, err := provider.retrier.Do(context.Background(), provider.factory)
 	if err != nil {
 		current.err = err
 
@@ -152,4 +169,27 @@ func (p *Provider[T]) initialize(current *state[T]) {
 	}
 
 	current.value = value
+}
+
+func finish[Value any](currentState *state[Value]) {
+	// revive:disable-next-line:defer finish is directly deferred by initialize.
+	if value := recover(); value != nil {
+		currentState.panicked = true
+		currentState.panicValue = value
+	}
+
+	currentState.settled.Store(true)
+	close(currentState.done)
+}
+
+func canReset[Value any](current *state[Value]) bool {
+	if current == nil {
+		return false
+	}
+
+	if !current.settled.Load() {
+		return false
+	}
+
+	return current.panicked || current.err != nil
 }

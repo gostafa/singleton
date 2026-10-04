@@ -8,10 +8,22 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
 	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 var errInternalStop = errors.New("private retry stop condition")
+
+func TestPublicInitErrorWrapsUnexpectedRetryErrors(t *testing.T) {
+	t.Parallel()
+
+	got := publicInitError(errBoom)
+	if got.Reason() != FailureExhausted || !errors.Is(got, ErrRetriesExhausted) {
+		t.Errorf("public error = %v, unwrap = %v", got, got.Unwrap())
+	}
+
+	assertPublicErrorChain(t, got)
+}
 
 func TestPublicInitErrorReplacesInternalStopCauses(t *testing.T) {
 	t.Parallel()
@@ -27,13 +39,13 @@ func TestPublicInitErrorReplacesInternalStopCauses(t *testing.T) {
 	}
 
 	for reason, test := range tests {
-		t.Run(reason.String(), func(t *testing.T) {
+		t.Run(test.reason.String(), func(t *testing.T) {
 			t.Parallel()
 
-			internal := domain.NewInitError(reason, errBoom, errInternalStop)
+			internal := backoffretry.NewInitError(reason, errBoom, errInternalStop)
 
 			got := publicInitError(internal)
-			if got.Reason != test.reason || !errors.Is(got, test.cause) {
+			if got.Reason() != test.reason || !errors.Is(got, test.cause) {
 				t.Errorf("public error = %v, unwrap = %v", got, got.Unwrap())
 			}
 
@@ -45,7 +57,7 @@ func TestPublicInitErrorReplacesInternalStopCauses(t *testing.T) {
 func assertPublicErrorChain(t *testing.T, got *InitError) {
 	t.Helper()
 
-	if !errors.Is(got.Err, errBoom) || !errors.Is(got, errBoom) {
+	if !errors.Is(got.Err(), errBoom) || !errors.Is(got, errBoom) {
 		t.Error("public error lost the factory error")
 	}
 
@@ -53,7 +65,7 @@ func assertPublicErrorChain(t *testing.T, got *InitError) {
 		t.Error("public error leaked the internal stop cause")
 	}
 
-	if _, ok := errors.AsType[*domain.InitError](got); ok {
+	if _, ok := errors.AsType[*backoffretry.InitError](got); ok {
 		t.Error("public error leaked the internal InitError")
 	}
 }

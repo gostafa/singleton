@@ -37,8 +37,8 @@ var (
 
 	// ErrRetriesExhausted means initialization spent its attempt budget.
 	ErrRetriesExhausted = errors.New("singleton: retries exhausted")
+
+	_ ports.Retrier[int] = publicRetrier[int]{retrier: nil}
+
+	_ Interface[int] = (*Provider[int])(nil)
 )
-
-var _ ports.Retrier[int] = publicRetrier[int]{retrier: nil}
-
-var _ Interface[int] = (*Provider[int])(nil)
