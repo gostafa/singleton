@@ -92,13 +92,13 @@ func Client(ctx context.Context) (*redis.Client, error) {
 }
 ```
 
-Nothing runs until the first `Get`. Fifty concurrent `Get` calls produce exactly one dial.
+Nothing runs until the first `Get`. Fifty concurrent `Get` calls share one initialization run; if dialing fails, that run retries within the configured budget.
 
 ## How it behaves
 
 ### Lazy and single-flight
 
-The factory runs on the first `Get` and exactly once, no matter how many goroutines call concurrently. Every caller receives the same value.
+The first `Get` starts one initialization run, no matter how many goroutines call concurrently. The run may call the factory multiple times when attempts fail, but attempts never overlap. After success, every caller receives the same value.
 
 ### Caller cancellation is isolated
 
@@ -195,7 +195,7 @@ if err != nil {
 }
 ```
 
-Distinguishing "the singleton failed" from "my request was cancelled" is exactly the `errors.As` check above: initialization failures are always `*InitError`, caller-context failures never are.
+Shared initialization failures are always `*InitError`. Caller cancellation instead returns an error wrapping `context.Cause(ctx)`. With ordinary cancellation or deadlines, the `errors.As` check above distinguishes the two. If you supply an `*InitError` as a custom cancellation cause, `errors.As` can also find that cause in the caller's error chain.
 
 ### Observability
 
@@ -384,7 +384,7 @@ func (e *InitError) Error() string
 func (e *InitError) Unwrap() []error
 ```
 
-Returned whenever shared initialization fails — always, so `errors.As(err, &initErr)` has no silent false branch.
+Returned whenever shared initialization fails. `Reason()` reports the retry policy's stop condition; `Err()` returns the final factory error. These are accessors on the public concrete type, whose fields are private.
 
 `Error()` formats as `singleton: <reason>: <err>`, e.g. `singleton: initialization timed out: dial: boom`.
 
@@ -485,10 +485,10 @@ A factory doing network I/O under a per-attempt deadline returns `context.Deadli
 
 ```go
 initErr.Reason()                            // FailureExhausted — correct
-errors.Is(err, context.DeadlineExceeded)  // ALSO true — the factory's error
+errors.Is(err, context.DeadlineExceeded)     // ALSO true — the factory's error
 ```
 
-`Reason()` is the authoritative classification. Reserve `errors.Is` for matching your own sentinel errors.
+`Reason()` is the authoritative classification. Use `errors.Is` to check whether a factory error or public stop error appears in the chain.
 
 ### The factory owns its cleanup
 
@@ -527,6 +527,10 @@ internal/
 
 Public types are defined in `singleton` and reference only public or standard-library types in their exported fields and signatures. Private adapters translate permanent markers, retry events, and initialization failures between this API and the internal implementation. Failures are converted before caching so callers share one public error instance.
 
-The `Retrier` port is what keeps `cenkalti/backoff` out of the API entirely, and it carries three obligations any adapter must honour: run the operation at least once; return the **zero** `T` on failure, never a half-built value; and set `Reason` from the policy's own stop condition rather than inferring it from the operation's error.
+The application provider delegates to a private `lifecycle` that owns the factory, retrier, mutex, and current state. Each initialization run stores its value, error, or panic in that state and signals completion to waiting callers. `Reset` discards only a settled unsuccessful state.
+
+The domain defines `InitError` and `PermanentError` as interfaces. The backoff adapter implements them with concrete errors, and the facade converts them to the public `*singleton.InitError` and translates public permanent markers into adapter markers. The public error types remain structs; consumers use `Reason()` and `Err()` on `InitError`, and the exported `Err` field on `PermanentError`.
+
+The `Retrier` port is what keeps `cenkalti/backoff` out of the API entirely, and it carries three obligations any adapter must honour: run the operation at least once; return the **zero** `T` on failure, never a half-built value; and set `Reason()` from the policy's own stop condition rather than inferring it from the operation's error.
 
 `go list -deps` on `internal/application`, `internal/domain` and `internal/ports` resolves **zero** backoff imports — the core does not know a retry engine exists.
