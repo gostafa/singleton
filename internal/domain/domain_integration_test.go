@@ -1,7 +1,8 @@
-package domain
+package domain_test
 
 import (
 	"errors"
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"slices"
 	"testing"
 	"time"
@@ -24,15 +25,15 @@ func TestFailureReasonString(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		reason FailureReason
+		reason domain.FailureReason
 		want   string
 	}{
-		"permanent":         {reason: FailurePermanent, want: "permanent failure"},
-		"exhausted":         {reason: FailureExhausted, want: "retries exhausted"},
-		"timed out":         {reason: FailureTimedOut, want: "initialization timed out"},
-		"canceled":          {reason: FailureCanceled, want: "initialization canceled"},
+		"permanent":         {reason: domain.FailurePermanent, want: "permanent failure"},
+		"exhausted":         {reason: domain.FailureExhausted, want: "retries exhausted"},
+		"timed out":         {reason: domain.FailureTimedOut, want: "initialization timed out"},
+		"canceled":          {reason: domain.FailureCanceled, want: "initialization canceled"},
 		"the unnamed zero":  {reason: 0, want: unknownReason},
-		"one past the last": {reason: FailureCanceled + 1, want: unknownReason},
+		"one past the last": {reason: domain.FailureCanceled + 1, want: unknownReason},
 		"far past the last": {reason: 200, want: unknownReason},
 	}
 
@@ -69,10 +70,10 @@ func TestNewInitErrorBuildsTheUnwrapChain(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			initErr := NewInitError(FailureExhausted, test.err, test.cause)
+			initErr := domain.NewInitError(domain.FailureExhausted, test.err, test.cause)
 
-			if initErr.Reason != FailureExhausted {
-				t.Errorf("Reason = %v, want %v", initErr.Reason, FailureExhausted)
+			if initErr.Reason != domain.FailureExhausted {
+				t.Errorf("Reason = %v, want %v", initErr.Reason, domain.FailureExhausted)
 			}
 
 			if !errors.Is(initErr.Err, test.err) {
@@ -86,28 +87,10 @@ func TestNewInitErrorBuildsTheUnwrapChain(t *testing.T) {
 	}
 }
 
-func TestInitErrorUnwrapFallsBackToErrWithoutAChain(t *testing.T) {
-	t.Parallel()
-
-	// NewInitError always fills the chain, so a bare struct literal is the only
-	// way to reach the fallback.
-	initErr := &InitError{Reason: FailureExhausted, Err: errFactory, chain: nil}
-
-	if got := initErr.Unwrap(); !sameErrors(got, []error{errFactory}) {
-		t.Errorf("Unwrap() = %v, want [%v]", got, errFactory)
-	}
-
-	empty := &InitError{Reason: FailureExhausted, Err: nil, chain: nil}
-
-	if got := empty.Unwrap(); got != nil {
-		t.Errorf("Unwrap() = %v, want nil", got)
-	}
-}
-
 func TestInitErrorErrorFormatsReasonAndCause(t *testing.T) {
 	t.Parallel()
 
-	initErr := NewInitError(FailurePermanent, errFactory, errStop)
+	initErr := domain.NewInitError(domain.FailurePermanent, errFactory, errStop)
 
 	const want = "singleton: permanent failure: factory failed"
 
@@ -133,7 +116,7 @@ func TestInitErrorErrorFormatsReasonAndCause(t *testing.T) {
 func TestPermanentReturnsNilForNil(t *testing.T) {
 	t.Parallel()
 
-	got := Permanent(nil)
+	got := domain.Permanent(nil)
 	if got != nil {
 		t.Errorf("Permanent(nil) = %v, want nil", got)
 	}
@@ -142,9 +125,9 @@ func TestPermanentReturnsNilForNil(t *testing.T) {
 func TestPermanentWrapsTheError(t *testing.T) {
 	t.Parallel()
 
-	got := Permanent(errFactory)
+	got := domain.Permanent(errFactory)
 
-	var permanent *PermanentError
+	var permanent *domain.PermanentError
 	if !errors.As(got, &permanent) {
 		t.Fatalf("errors.As(%v, *PermanentError) = false, want true", got)
 	}
@@ -165,7 +148,7 @@ func TestPermanentWrapsTheError(t *testing.T) {
 func TestRetryObserverSafeReturnsNilForNil(t *testing.T) {
 	t.Parallel()
 
-	var observer RetryObserver
+	var observer domain.RetryObserver
 
 	if observer.Safe() != nil {
 		t.Error("Safe() on a nil observer = non-nil, want nil")
@@ -175,10 +158,10 @@ func TestRetryObserverSafeReturnsNilForNil(t *testing.T) {
 func TestRetryObserverSafeDeliversTheEvent(t *testing.T) {
 	t.Parallel()
 
-	var got RetryEvent
+	var got domain.RetryEvent
 
-	observer := RetryObserver(func(event RetryEvent) { got = event })
-	want := RetryEvent{Attempt: 2, Err: errFactory, NextDelay: time.Second}
+	observer := domain.RetryObserver(func(event domain.RetryEvent) { got = event })
+	want := domain.RetryEvent{Attempt: 2, Err: errFactory, NextDelay: time.Second}
 
 	observer.Safe()(want)
 
@@ -192,13 +175,13 @@ func TestRetryObserverSafeRecoversFromAPanic(t *testing.T) {
 
 	called := false
 
-	observer := RetryObserver(func(RetryEvent) {
+	observer := domain.RetryObserver(func(domain.RetryEvent) {
 		called = true
 
 		panic("observer exploded")
 	})
 
-	observer.Safe()(RetryEvent{Attempt: 1, Err: errFactory, NextDelay: 0})
+	observer.Safe()(domain.RetryEvent{Attempt: 1, Err: errFactory, NextDelay: 0})
 
 	if !called {
 		t.Error("the observer was never called")

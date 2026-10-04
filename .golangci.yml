@@ -12,6 +12,8 @@ linters:
   enable:
     - gomodguard_v2
   settings:
+    testpackage:
+      skip-regexp: '(^|/)(singleton|domain|application|ports|backoffretry)_test\.go$'
     depguard:
       rules:
         main:

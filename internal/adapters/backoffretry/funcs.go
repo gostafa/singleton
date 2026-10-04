@@ -1,59 +1,19 @@
-// Package backoffretry adapts github.com/cenkalti/backoff to the singleton
-// Retrier port.
-//
-// It is the only package that imports a retry engine. Everything the engine
-// reports is translated into domain types here, so no part of the core — and
-// no caller — depends on its error model.
 package backoffretry
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/cenkalti/backoff/v7"
 	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"time"
 )
-
-const (
-	multiplier          = 2
-	randomizationFactor = 0.2
-)
-
-// Config tunes the retry policy.
-type Config struct {
-	// MaxAttempts is the total number of attempts, including the first.
-	MaxAttempts uint
-
-	// Timeout bounds the whole retry loop. Zero disables it.
-	Timeout time.Duration
-
-	// InitialInterval is the first delay between attempts.
-	InitialInterval time.Duration
-
-	// MaxInterval is the ceiling the delay grows toward.
-	MaxInterval time.Duration
-
-	// Observer receives one event per retried attempt. It must already be
-	// panic-safe; see [domain.RetryObserver.Safe].
-	Observer domain.RetryObserver
-}
-
-// Retrier runs an operation with exponential backoff and jitter.
-//
-// It implements [ports.Retrier].
-type Retrier[T any] struct {
-	cfg Config
-}
 
 // New builds a Retrier for values of type T.
 func New[T any](cfg Config) *Retrier[T] {
 	return &Retrier[T]{cfg: cfg}
 }
-
-var _ ports.Retrier[int] = (*Retrier[int])(nil)
 
 // Do runs op until it succeeds or the policy stops.
 //

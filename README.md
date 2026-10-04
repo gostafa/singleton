@@ -300,10 +300,27 @@ func Permanent(err error) error
 
 Marks a factory error as non-retriable. Initialization stops at that attempt with `Reason == FailurePermanent`. `Permanent(nil)` returns `nil`. The wrapped error stays reachable through `errors.Is` / `errors.As`.
 
+The concrete result is a `*PermanentError`, which callers can inspect with `errors.As`. A factory may also return a `*PermanentError` directly, including wrapped in another error.
+
+### Error values
+
+Use `errors.Is` to match construction errors returned by `New` or panicked by `MustNew`:
+
+| Error | Meaning |
+| --- | --- |
+| `ErrNilFactory` | The factory is nil |
+| `ErrInvalidOption` | A zero-value `Option{}` was passed |
+| `ErrZeroMaxAttempts` | The attempt budget is zero |
+| `ErrNegativeTimeout` | The initialization timeout is negative |
+| `ErrZeroInitialInterval` | The initial retry interval is not positive |
+| `ErrMaxIntervalBelowInitial` | The maximum retry interval is less than the initial interval |
+
+`InitError.Unwrap` exposes the factory error and a public stop error: `ErrPermanent`, `ErrRetriesExhausted`, `context.DeadlineExceeded`, or `context.Canceled`. Retry-library stop errors stay internal; callers that previously matched them should use these public equivalents. Classify initialization with `InitError.Reason` because a factory error can also match a stop error.
+
 ### `type Provider`
 
 ```go
-type Provider[T any] = application.Provider[T]
+type Provider[T any] struct { /* unexported */ }
 ```
 
 The lazy singleton. Create with `New` or `MustNew`; the zero value is unusable and must not be copied after first use.
@@ -370,13 +387,29 @@ Returned whenever shared initialization fails — always, so `errors.As(err, &in
 
 `Error()` formats as `singleton: <reason>: <err>`, e.g. `singleton: initialization timed out: dial: boom`.
 
-`Unwrap` returns both the factory error and the retry loop's stop reason, so `errors.Is` matches either:
+`Unwrap` returns both the factory error and the retry loop's public stop error, so `errors.Is` matches either:
 
 ```go
-errors.Is(err, myFactoryError)            // true
-errors.Is(err, context.DeadlineExceeded)  // true, for a timeout
-errors.Unwrap(err)                        // nil — this is a multi-error Unwrap
+errors.Is(err, myFactoryError)               // true
+errors.Is(err, context.DeadlineExceeded)     // true, for a timeout
+errors.Is(err, singleton.ErrRetriesExhausted) // true, for an exhausted budget
+errors.Unwrap(err)                           // nil — this is a multi-error Unwrap
 ```
+
+Repeated `Get` calls return the same cached `*InitError` until `Reset`. A manually constructed `InitError` unwraps only its `Err` field.
+
+### `type PermanentError`
+
+```go
+type PermanentError struct {
+    Err error
+}
+
+func (e *PermanentError) Error() string
+func (e *PermanentError) Unwrap() error
+```
+
+Marks the wrapped error as non-retriable. `Error` returns the wrapped error's message, and `Unwrap` returns `Err`. Create one with `Permanent(err)` or return a `*PermanentError` directly from the factory.
 
 ### `type FailureReason`
 
@@ -470,16 +503,18 @@ Nil context and zero-value `Provider` panic rather than returning errors, matchi
 
 The initialization context descends from `context.Background()` with only a timeout, and nothing cancels it — so no failure is classified `FailureCanceled` today. The constant exists for a future shutdown hook. Don't write a code path that depends on receiving it.
 
-### The concrete type behind `Permanent` is internal
+### Inspecting permanent errors
 
-`Permanent(err)` returns an error you cannot type-assert from outside. Inspect it with `errors.Is` / `errors.As` against your own error, or read `InitError.Reason`.
+`Permanent(err)` returns a public `*PermanentError`. Inspect the marker with `errors.As`, match its wrapped error with `errors.Is`, or read `InitError.Reason` after initialization stops. The final initialization error preserves the marker's wrapped error in `InitError.Err`.
 
 ## Architecture
 
 Ports and adapters, with everything but the facade under `internal/`:
 
 ```
-singleton.go                       public surface: aliases, Interface, New/MustNew
+singleton.go                       Provider facade, Factory, Interface, New/MustNew
+errors.go                          public failure types and error values
+retry.go                           RetryEvent and private boundary conversions
 options.go                         Option and the four With* constructors
 internal/
   domain/                          value types — stdlib only
@@ -487,6 +522,8 @@ internal/
   application/provider.go          lazy single-flight state machine
   adapters/backoffretry/           the only package importing a retry engine
 ```
+
+Public types are defined in `singleton` and reference only public or standard-library types in their exported fields and signatures. Private adapters translate permanent markers, retry events, and initialization failures between this API and the internal implementation. Failures are converted before caching so callers share one public error instance.
 
 The `Retrier` port is what keeps `cenkalti/backoff` out of the API entirely, and it carries three obligations any adapter must honour: run the operation at least once; return the **zero** `T` on failure, never a half-built value; and set `Reason` from the policy's own stop condition rather than inferring it from the operation's error.
 

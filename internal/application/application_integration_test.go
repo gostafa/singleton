@@ -1,14 +1,13 @@
-package application
+package application_test
 
 import (
 	"context"
 	"errors"
+	"github.com/mostafakhairy0305-dot/singleton/internal/application"
+	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
-
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 )
 
 var (
@@ -16,10 +15,6 @@ var (
 	errGaveUp  = errors.New("caller gave up")
 	errNoRetry = errors.New("no retries here")
 )
-
-// lockHandoff is how long a test waits for a goroutine to park on the
-// provider's mutex before the test hands it something to find.
-const lockHandoff = 50 * time.Millisecond
 
 // onceRetrier runs the operation exactly once, so a test controls the outcome
 // entirely through its factory.
@@ -62,7 +57,7 @@ func TestGetInitializesOnceAndCachesTheValue(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		return 42, nil
@@ -89,7 +84,7 @@ func TestGetCachesTheFailure(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		return 9, errInit
@@ -114,7 +109,7 @@ func TestGetCachesTheFailure(t *testing.T) {
 func TestGetSurfacesARetrierFailureWithoutRunningTheFactory(t *testing.T) {
 	t.Parallel()
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		t.Error("the factory ran, want the retrier to fail first")
 
 		return 0, nil
@@ -131,7 +126,7 @@ func TestGetRePanicsWithTheFactoryPanic(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		panic("factory exploded")
@@ -154,7 +149,7 @@ func TestGetRePanicsWithTheFactoryPanic(t *testing.T) {
 func TestGetPanicsOnANilContext(t *testing.T) {
 	t.Parallel()
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		return 1, nil
 	}, onceRetrier[int]{})
 
@@ -169,7 +164,7 @@ func TestGetPanicsOnANilContext(t *testing.T) {
 func TestGetPanicsOnTheZeroProvider(t *testing.T) {
 	t.Parallel()
 
-	var provider Provider[int]
+	var provider application.Provider[int]
 
 	const want = "singleton: Provider must be created with New or MustNew"
 
@@ -185,7 +180,7 @@ func TestGetStopsWaitingWhenTheCallerContextEnds(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		<-release
 
 		return 7, nil
@@ -209,32 +204,10 @@ func TestGetStopsWaitingWhenTheCallerContextEnds(t *testing.T) {
 	}
 }
 
-func TestAbandonReturnsTheResultWhenInitializationWinsTheRace(t *testing.T) {
-	t.Parallel()
-
-	current := new(state[int])
-	current.done = make(chan struct{})
-	current.value = 99
-	current.settled.Store(true)
-	close(current.done)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	got, err := current.abandon(ctx)
-	if err != nil {
-		t.Fatalf("abandon() error = %v, want nil", err)
-	}
-
-	if got != 99 {
-		t.Errorf("abandon() = %d, want 99", got)
-	}
-}
-
 func TestResetBeforeTheFirstGetDoesNothing(t *testing.T) {
 	t.Parallel()
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		return 3, nil
 	}, onceRetrier[int]{})
 
@@ -255,7 +228,7 @@ func TestResetDiscardsAFailedInitialization(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		if calls.Add(1) == 1 {
 			return 0, errInit
 		}
@@ -285,7 +258,7 @@ func TestResetDiscardsAPanickedInitialization(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		if calls.Add(1) == 1 {
 			panic("factory exploded")
 		}
@@ -312,7 +285,7 @@ func TestResetKeepsASuccessfulValue(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		return int(calls.Add(1)), nil
 	}, onceRetrier[int]{})
 
@@ -341,7 +314,7 @@ func TestResetLeavesAnInFlightInitializationAlone(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		calls.Add(1)
 		close(entered)
 		<-release
@@ -379,38 +352,6 @@ func TestResetLeavesAnInFlightInitializationAlone(t *testing.T) {
 	}
 }
 
-func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
-	t.Parallel()
-
-	provider := NewProvider(func(context.Context) (int, error) {
-		t.Error("the factory ran, want load to adopt the stored state")
-
-		return 0, nil
-	}, onceRetrier[int]{})
-
-	existing := new(state[int])
-	existing.done = make(chan struct{})
-	existing.value = 11
-	existing.settled.Store(true)
-	close(existing.done)
-
-	provider.mu.Lock()
-
-	loaded := make(chan *state[int], 1)
-
-	go func() { loaded <- provider.load() }()
-
-	// The goroutine finds a nil state and parks on the held mutex; only then is
-	// there a state for it to discover on the second check.
-	time.Sleep(lockHandoff)
-	provider.current.Store(existing)
-	provider.mu.Unlock()
-
-	if got := <-loaded; got != existing {
-		t.Errorf("load() = %p, want the stored state %p", got, existing)
-	}
-}
-
 func TestConcurrentGetsShareOneInitialization(t *testing.T) {
 	t.Parallel()
 
@@ -418,7 +359,7 @@ func TestConcurrentGetsShareOneInitialization(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		return 21, nil

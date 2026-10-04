@@ -1,7 +1,8 @@
-// Package ports defines the interfaces the singleton core speaks through.
 package ports
 
-import "context"
+import (
+	"context"
+)
 
 // Operation is one initialization attempt.
 //
@@ -20,11 +21,13 @@ type Operation[T any] func(context.Context) (T, error)
 //     back a partially built value alongside an error invites callers who check
 //     the error loosely to use a half-open connection.
 //
-//   - On failure return a *domain.InitError whose Reason comes from the
+//   - On failure return a classified initialization error whose Reason comes from the
 //     policy's own stop condition, never inferred from the operation's error.
 //     A policy that classifies by inspecting the operation error reports a
 //     timeout for an operation that returned context.DeadlineExceeded on every
 //     attempt, when what actually happened is that the retry budget ran out.
+//     Retry adapters use *domain.InitError; the public boundary converts it
+//     before the application caches it.
 type Retrier[T any] interface {
 	// Do runs op until it succeeds or the policy stops.
 	//

@@ -1,14 +1,13 @@
-package backoffretry
+package backoffretry_test
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"testing"
 	"time"
-
-	"github.com/cenkalti/backoff/v7"
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 var (
@@ -22,8 +21,8 @@ func fastConfig(
 	attempts uint,
 	timeout time.Duration,
 	observer domain.RetryObserver,
-) Config {
-	return Config{
+) backoffretry.Config {
+	return backoffretry.Config{
 		MaxAttempts:     attempts,
 		Timeout:         timeout,
 		InitialInterval: time.Millisecond,
@@ -78,7 +77,7 @@ func TestDoReturnsTheFirstSuccess(t *testing.T) {
 
 	calls := 0
 
-	got, err := New[int](fastConfig(3, time.Second, nil)).
+	got, err := backoffretry.New[int](fastConfig(3, time.Second, nil)).
 		Do(context.Background(), func(context.Context) (int, error) {
 			calls++
 
@@ -109,7 +108,7 @@ func TestDoRetriesUntilSuccessAndNotifiesTheObserver(t *testing.T) {
 
 	calls := 0
 
-	got, err := New[string](cfg).
+	got, err := backoffretry.New[string](cfg).
 		Do(context.Background(), func(context.Context) (string, error) {
 			calls++
 			if calls < 3 {
@@ -140,7 +139,7 @@ func TestDoReportsAnExhaustedAttemptBudget(t *testing.T) {
 	calls := 0
 
 	// A nil observer still runs the notify callback, which must return early.
-	got, err := New[int](fastConfig(3, time.Second, nil)).
+	got, err := backoffretry.New[int](fastConfig(3, time.Second, nil)).
 		Do(context.Background(), func(context.Context) (int, error) {
 			calls++
 
@@ -170,7 +169,7 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 
 	calls := 0
 
-	_, err := New[int](fastConfig(5, time.Second, nil)).
+	_, err := backoffretry.New[int](fastConfig(5, time.Second, nil)).
 		Do(context.Background(), func(context.Context) (int, error) {
 			calls++
 
@@ -194,7 +193,7 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 func TestDoReportsItsOwnTimeout(t *testing.T) {
 	t.Parallel()
 
-	_, err := New[int](fastConfig(5, 20*time.Millisecond, nil)).
+	_, err := backoffretry.New[int](fastConfig(5, 20*time.Millisecond, nil)).
 		Do(context.Background(), func(ctx context.Context) (int, error) {
 			<-ctx.Done()
 
@@ -214,7 +213,7 @@ func TestDoReportsACancelledParentContext(t *testing.T) {
 	defer cancel()
 
 	// A zero timeout means the parent context is the only stop condition.
-	_, err := New[int](fastConfig(5, 0, nil)).
+	_, err := backoffretry.New[int](fastConfig(5, 0, nil)).
 		Do(ctx, func(ctx context.Context) (int, error) {
 			cancel()
 			<-ctx.Done()
@@ -225,51 +224,5 @@ func TestDoReportsACancelledParentContext(t *testing.T) {
 	initErr := requireInitError(t, err)
 	if initErr.Reason != domain.FailureCanceled {
 		t.Errorf("Reason = %v, want %v", initErr.Reason, domain.FailureCanceled)
-	}
-}
-
-func TestTranslateClassifiesByTheStopCondition(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]struct {
-		err  error
-		want domain.FailureReason
-	}{
-		"not a retry error at all": {err: errBoom, want: domain.FailureExhausted},
-		"permanent": {
-			err:  &backoff.RetryError{LastErr: errBoom, Cause: backoff.ErrPermanent},
-			want: domain.FailurePermanent,
-		},
-		"context deadline": {
-			err:  &backoff.RetryError{LastErr: errBoom, Cause: context.DeadlineExceeded},
-			want: domain.FailureTimedOut,
-		},
-		"maximum elapsed time": {
-			err:  &backoff.RetryError{LastErr: errBoom, Cause: backoff.ErrMaxElapsedTime},
-			want: domain.FailureTimedOut,
-		},
-		"context canceled": {
-			err:  &backoff.RetryError{LastErr: errBoom, Cause: context.Canceled},
-			want: domain.FailureCanceled,
-		},
-		"retries exhausted": {
-			err:  &backoff.RetryError{LastErr: errBoom, Cause: backoff.ErrExhausted},
-			want: domain.FailureExhausted,
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			initErr := requireInitError(t, translate(test.err))
-			if initErr.Reason != test.want {
-				t.Errorf("Reason = %v, want %v", initErr.Reason, test.want)
-			}
-
-			if !errors.Is(initErr.Err, errBoom) {
-				t.Errorf("Err = %v, want %v", initErr.Err, errBoom)
-			}
-		})
 	}
 }
