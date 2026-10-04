@@ -3,8 +3,9 @@ package singleton
 import (
 	"context"
 	"errors"
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"testing"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 var errInternalStop = errors.New("private retry stop condition")
@@ -54,9 +55,7 @@ func assertPublicErrorChain(t *testing.T, got *InitError) {
 	}
 }
 
-var (
-	errBoom = errors.New("boom")
-)
+var errBoom = errors.New("boom")
 
 func TestDefaultConfig(t *testing.T) {
 	t.Parallel()

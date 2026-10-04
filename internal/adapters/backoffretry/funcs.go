@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/cenkalti/backoff/v7"
 	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
-	"time"
 )
 
 // New builds a Retrier for values of type T.

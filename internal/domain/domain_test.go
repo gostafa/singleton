@@ -6,9 +6,7 @@ import (
 	"testing"
 )
 
-var (
-	errFactory = errors.New("factory failed")
-)
+var errFactory = errors.New("factory failed")
 
 // sameErrors compares two unwrap chains positionally.
 func sameErrors(got, want []error) bool {

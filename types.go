@@ -2,10 +2,11 @@ package singleton
 
 import (
 	"context"
+	"time"
+
 	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
 	"github.com/mostafakhairy0305-dot/singleton/internal/application"
 	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
-	"time"
 )
 
 // FailureReason explains why initialization stopped.

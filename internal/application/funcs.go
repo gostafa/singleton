@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+
 	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 )
 
