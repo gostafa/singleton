@@ -841,7 +841,7 @@ func benchBlockedProvider(b *testing.B) (*singleton.Provider[int], func()) {
 }
 
 // BenchmarkGetCallerCancellation measures abandoning a shared initialization.
-// Only the live_deadline scenario includes waiting for a timer to expire.
+// Only live_deadline includes context creation and waiting for a timer to expire.
 func BenchmarkGetCallerCancellation(b *testing.B) {
 	for _, kind := range []string{"canceled", "expired_deadline", "custom_cause", "live_deadline"} {
 		b.Run(kind, func(b *testing.B) {
@@ -866,17 +866,13 @@ func BenchmarkGetCallerCancellation(b *testing.B) {
 			}
 			for b.Loop() {
 				if kind == "live_deadline" {
-					b.StopTimer()
 					deadlineCtx, deadlineCancel := context.WithTimeout(
 						b.Context(),
 						time.Millisecond,
 					)
-					b.StartTimer()
 					value, err := provider.Get(deadlineCtx)
-					b.StopTimer()
 					deadlineCancel()
 					checkBenchCancellation(b, value, err, context.DeadlineExceeded)
-					b.StartTimer()
 				} else {
 					value, err := provider.Get(ctx)
 					checkBenchCancellation(b, value, err, want)
@@ -894,9 +890,10 @@ func checkBenchCancellation(b *testing.B, value int, err, want error) {
 	}
 }
 
-// BenchmarkFirstGetCanceled measures construction and an already-canceled
-// first caller; completion of the continuing initialization is untimed.
-func BenchmarkFirstGetCanceled(b *testing.B) {
+// BenchmarkFirstGetCanceledAndComplete measures construction, an already-canceled
+// first caller, and completion of the continuing initialization. Timing the whole
+// cycle avoids calibrating against a fast Get while excluding its required work.
+func BenchmarkFirstGetCanceledAndComplete(b *testing.B) {
 	b.ReportAllocs()
 	ctx, cancel := context.WithCancelCause(b.Context())
 	cancel(errBench)
@@ -907,14 +904,12 @@ func BenchmarkFirstGetCanceled(b *testing.B) {
 			return 42, nil
 		}, singleton.WithInitializationTimeout(0))
 		value, err := provider.Get(ctx)
-		b.StopTimer()
 		close(release)
 		got, completionErr := provider.Get(b.Context())
 		checkBenchCancellation(b, value, err, errBench)
 		if got != 42 || completionErr != nil {
 			b.Fatalf("Get() after cancellation = (%d, %v)", got, completionErr)
 		}
-		b.StartTimer()
 	}
 }
 
@@ -960,8 +955,10 @@ func BenchmarkGetPanic(b *testing.B) {
 	}
 }
 
-// BenchmarkReset measures Reset alone, preparing failed states while untimed.
-func BenchmarkReset(b *testing.B) {
+// BenchmarkFailureAndReset measures failed/panicked initialization plus Reset.
+// Include the failure in the measured cycle: pausing around it on every iteration
+// makes timer bookkeeping and unmeasured initialization dominate the run time.
+func BenchmarkFailureAndReset(b *testing.B) {
 	for _, kind := range []string{"failed", "panicked"} {
 		b.Run(kind, func(b *testing.B) {
 			b.ReportAllocs()
@@ -974,9 +971,7 @@ func BenchmarkReset(b *testing.B) {
 				return 99, singleton.Permanent(errBench)
 			})
 			for b.Loop() {
-				b.StopTimer()
 				benchPrepareFailure(b, provider, kind)
-				b.StartTimer()
 				provider.Reset()
 			}
 			// One more initialization verifies the final Reset discarded its state.
@@ -986,6 +981,10 @@ func BenchmarkReset(b *testing.B) {
 			}
 		})
 	}
+}
+
+// BenchmarkReset measures Reset alone on states that do not require reinitialization.
+func BenchmarkReset(b *testing.B) {
 	for _, kind := range []string{"zero", "before_get", "successful", "in_flight"} {
 		b.Run(kind, func(b *testing.B) {
 			b.ReportAllocs()
@@ -1030,14 +1029,13 @@ func benchPrepareFailure(b *testing.B, provider *singleton.Provider[int], kind s
 	benchFailure(b, value, err, singleton.FailurePermanent, singleton.ErrPermanent)
 }
 
-// BenchmarkResetAndRecover measures resetting a failed/panicked initialization
-// and initializing successfully; construction and initial failure are untimed.
-func BenchmarkResetAndRecover(b *testing.B) {
+// BenchmarkFailureAndRecover measures construction, failed/panicked initialization,
+// Reset, and successful recovery as one complete cycle.
+func BenchmarkFailureAndRecover(b *testing.B) {
 	for _, kind := range []string{"failed", "panicked"} {
 		b.Run(kind, func(b *testing.B) {
 			b.ReportAllocs()
 			for b.Loop() {
-				b.StopTimer()
 				attempts := 0
 				var provider singleton.Interface[int] = singleton.MustNew(func(context.Context) (int, error) {
 					attempts++
@@ -1055,14 +1053,11 @@ func BenchmarkResetAndRecover(b *testing.B) {
 					value, err := provider.Get(b.Context())
 					benchFailure(b, value, err, singleton.FailurePermanent, singleton.ErrPermanent)
 				}
-				b.StartTimer()
 				provider.Reset()
 				value, err := provider.Get(b.Context())
-				b.StopTimer()
 				if value != 42 || err != nil || attempts != 2 {
 					b.Fatalf("Get() after Reset = (%d, %v), attempts = %d", value, err, attempts)
 				}
-				b.StartTimer()
 			}
 		})
 	}
