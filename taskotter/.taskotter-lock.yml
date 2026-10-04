@@ -12,11 +12,14 @@ configuration:
     - yamlfix
     - zizmor
     - adrs
+    - go-junit-report
 generated_root_tasks:
   - ci
   - ci:fix
   - install
+  - verify
   - version
+  - which
 managed_files:
   - destination_module: actionlint
     path: taskotter/actionlint/README.md
@@ -48,6 +51,16 @@ managed_files:
     sha256: 2dab2c7e6a2d6734751299741b78b440d79b4b5dccfbac48fd51b00fc1348dab
     source_module: cargo
     source_path: taskfiles/cargo/Taskfile.yml
+  - destination_module: go-junit-report
+    path: taskotter/go-junit-report/README.md
+    sha256: 08c81a6ad8838d87ce8f8293bbb444226ef48a9544deb94fbd830a04cf790662
+    source_module: go-junit-report
+    source_path: taskfiles/go-junit-report/README.md
+  - destination_module: go-junit-report
+    path: taskotter/go-junit-report/Taskfile.yml
+    sha256: 1a078a9b816accb0cd1d221030790117d657157e183c0e3214e10be1d2dd7f31
+    source_module: go-junit-report
+    source_path: taskfiles/go-junit-report/Taskfile.yml
   - destination_module: go
     path: taskotter/go/README.md
     sha256: ef2e1659c78ac5a24873941e5059369c21bdc6ef7067d9ce9ab3bf45975147ef
@@ -155,6 +168,10 @@ resolved_modules:
       destination_module: go
       path: taskotter/go
       source_module: go
+    go-junit-report:
+      destination_module: go-junit-report
+      path: taskotter/go-junit-report
+      source_module: go-junit-report
     golangci-lint:
       destination_module: golangci-lint
       path: taskotter/golangci-lint

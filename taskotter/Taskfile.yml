@@ -39,6 +39,10 @@ vars:
   ZIZMOR_NIX_INSTALLABLE: '{{.ZIZMOR_NIX_INSTALLABLE | default "nixpkgs#zizmor"}}'
   ZIZMOR_TARGETS: '{{.ZIZMOR_TARGETS | default ".github"}}'
   ZIZMOR_WINGET_INSTALLABLE: '{{.ZIZMOR_WINGET_INSTALLABLE | default "zizmor.zizmor"}}'
+  GO_JUNIT_REPORT_GO_PKG: '{{.GO_JUNIT_REPORT_GO_PKG | default "github.com/jstemmer/go-junit-report/v2@latest"}}'
+  GO_JUNIT_REPORT_IN: '{{.GO_JUNIT_REPORT_IN | default ""}}'
+  GO_JUNIT_REPORT_NIX_INSTALLABLE: '{{.GO_JUNIT_REPORT_NIX_INSTALLABLE | default "nixpkgs#go-junit-report"}}'
+  GO_JUNIT_REPORT_OUT: '{{.GO_JUNIT_REPORT_OUT | default ""}}'
 includes:
   go:
     taskfile: go/Taskfile.yml
@@ -103,6 +107,14 @@ includes:
       ADRS_NIX_INSTALLABLE: '{{.ADRS_NIX_INSTALLABLE}}'
       ADRS_CARGO_CRATE: '{{.ADRS_CARGO_CRATE}}'
       ADRS_EXTRA_ARGS: '{{.ADRS_EXTRA_ARGS}}'
+  go-junit-report:
+    taskfile: go-junit-report/Taskfile.yml
+    dir: ..
+    vars:
+      GO_JUNIT_REPORT_NIX_INSTALLABLE: '{{.GO_JUNIT_REPORT_NIX_INSTALLABLE}}'
+      GO_JUNIT_REPORT_GO_PKG: '{{.GO_JUNIT_REPORT_GO_PKG}}'
+      GO_JUNIT_REPORT_IN: '{{.GO_JUNIT_REPORT_IN}}'
+      GO_JUNIT_REPORT_OUT: '{{.GO_JUNIT_REPORT_OUT}}'
 tasks:
   ci:
     desc: Run ci for synced TaskOtter modules
@@ -126,6 +138,12 @@ tasks:
       - task: yamlfix:install
       - task: zizmor:install
       - task: adrs:install
+      - task: go-junit-report:install
+  verify:
+    desc: Run verify for synced TaskOtter modules
+    cmds:
+      - task: go:verify
+      - task: go-junit-report:verify
   version:
     desc: Run version for synced TaskOtter modules
     cmds:
@@ -136,3 +154,9 @@ tasks:
       - task: yamlfix:version
       - task: zizmor:version
       - task: adrs:version
+      - task: go-junit-report:version
+  which:
+    desc: Run which for synced TaskOtter modules
+    cmds:
+      - task: go:which
+      - task: go-junit-report:which
