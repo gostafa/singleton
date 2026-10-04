@@ -1,0 +1,138 @@
+---
+version: "3.5"
+vars:
+  ACTIONLINT_EXTRA_ARGS: '{{.ACTIONLINT_EXTRA_ARGS | default ""}}'
+  ACTIONLINT_NIX_INSTALLABLE: '{{.ACTIONLINT_NIX_INSTALLABLE | default "nixpkgs#actionlint"}}'
+  ACTIONLINT_TARGETS: '{{.ACTIONLINT_TARGETS | default ""}}'
+  ACTIONLINT_WINGET_INSTALLABLE: '{{.ACTIONLINT_WINGET_INSTALLABLE | default "rhysd.actionlint"}}'
+  ADRS_CARGO_CRATE: '{{.ADRS_CARGO_CRATE | default "adrs"}}'
+  ADRS_EXTRA_ARGS: '{{.ADRS_EXTRA_ARGS | default ""}}'
+  ADRS_NIX_INSTALLABLE: '{{.ADRS_NIX_INSTALLABLE | default "nixpkgs#adrs"}}'
+  GOLANGCI_LINT_FMT_FORMATTER_FLAGS: >-
+    {{.GOLANGCI_LINT_FMT_FORMATTER_FLAGS | default "-E gci -E gofmt -E gofumpt
+    -E goimports -E golines"}}
+  GOLANGCI_LINT_NIX_INSTALLABLE: '{{.GOLANGCI_LINT_NIX_INSTALLABLE | default "nixpkgs#go nixpkgs#golangci-lint"}}'
+  GOLANGCI_LINT_WINGET_INSTALLABLE: '{{.GOLANGCI_LINT_WINGET_INSTALLABLE | default "GolangCI.golangci-lint"}}'
+  GO_FUZZTIME: '{{.GO_FUZZTIME | default ""}}'
+  GO_LOAD: >-
+    {{.GO_LOAD | default `
+    \$u = [Environment]::GetEnvironmentVariable('Path', 'User');
+    if (\$u) { \$env:Path = \$u + ';' + \$env:Path };
+    if (Get-Command go -ErrorAction SilentlyContinue) {
+      \$goBin = Join-Path ((go env GOPATH).Trim()) 'bin';
+      if (Test-Path -LiteralPath \$goBin) { \$env:Path = \$goBin + ';' + \$env:Path }
+    }
+    `}}
+  GO_NIX_INSTALLABLE: '{{.GO_NIX_INSTALLABLE | default "nixpkgs#go"}}'
+  GO_PKG: '{{.GO_PKG | default ""}}'
+  GO_WINGET_INSTALLABLE: '{{.GO_WINGET_INSTALLABLE | default "GoLang.Go"}}'
+  YAMLFIX_EXTRA_ARGS: '{{.YAMLFIX_EXTRA_ARGS | default ""}}'
+  YAMLFIX_NIX_INSTALLABLE: '{{.YAMLFIX_NIX_INSTALLABLE | default "nixpkgs#yamlfix"}}'
+  YAMLFIX_TARGETS: '{{.YAMLFIX_TARGETS | default "."}}'
+  YAMLFIX_UV_TOOL: '{{.YAMLFIX_UV_TOOL | default "yamlfix"}}'
+  YAMLLINT_CONFIG: '{{.YAMLLINT_CONFIG | default ""}}'
+  YAMLLINT_EXTRA_ARGS: '{{.YAMLLINT_EXTRA_ARGS | default ""}}'
+  YAMLLINT_NIX_INSTALLABLE: '{{.YAMLLINT_NIX_INSTALLABLE | default "nixpkgs#yamllint"}}'
+  YAMLLINT_TARGETS: '{{.YAMLLINT_TARGETS | default "."}}'
+  YAMLLINT_UV_TOOL: '{{.YAMLLINT_UV_TOOL | default "yamllint"}}'
+  ZIZMOR_EXTRA_ARGS: '{{.ZIZMOR_EXTRA_ARGS | default "--offline"}}'
+  ZIZMOR_NIX_INSTALLABLE: '{{.ZIZMOR_NIX_INSTALLABLE | default "nixpkgs#zizmor"}}'
+  ZIZMOR_TARGETS: '{{.ZIZMOR_TARGETS | default ".github"}}'
+  ZIZMOR_WINGET_INSTALLABLE: '{{.ZIZMOR_WINGET_INSTALLABLE | default "zizmor.zizmor"}}'
+includes:
+  go:
+    taskfile: go/Taskfile.yml
+    dir: ..
+    vars:
+      GO_NIX_INSTALLABLE: '{{.GO_NIX_INSTALLABLE}}'
+      GO_WINGET_INSTALLABLE: '{{.GO_WINGET_INSTALLABLE}}'
+      GO_FUZZTIME: '{{.GO_FUZZTIME}}'
+      GO_PKG: '{{.GO_PKG}}'
+      # \$ so Task's POSIX shell (mvdan/sh) leaves literal $ for PowerShell.
+      # Reload User Path (install:pkg writes GOPATH\bin there) and prepend
+      # GOPATH\bin so go-installed tools from earlier in this Task process are
+      # visible to later PowerShell cmds.
+      GO_LOAD: '{{.GO_LOAD}}'
+  golangci-lint:
+    taskfile: golangci-lint/Taskfile.yml
+    dir: ..
+    vars:
+      GOLANGCI_LINT_NIX_INSTALLABLE: '{{.GOLANGCI_LINT_NIX_INSTALLABLE}}'
+      GOLANGCI_LINT_WINGET_INSTALLABLE: '{{.GOLANGCI_LINT_WINGET_INSTALLABLE}}'
+      # Formatter selection shared by every golangci-lint fmt invocation on Unix and
+
+      # Windows. Kept in one place so the two call sites cannot drift apart.
+      GOLANGCI_LINT_FMT_FORMATTER_FLAGS: '{{.GOLANGCI_LINT_FMT_FORMATTER_FLAGS}}'
+  actionlint:
+    taskfile: actionlint/Taskfile.yml
+    dir: ..
+    vars:
+      ACTIONLINT_NIX_INSTALLABLE: '{{.ACTIONLINT_NIX_INSTALLABLE}}'
+      ACTIONLINT_WINGET_INSTALLABLE: '{{.ACTIONLINT_WINGET_INSTALLABLE}}'
+      ACTIONLINT_EXTRA_ARGS: '{{.ACTIONLINT_EXTRA_ARGS}}'
+      ACTIONLINT_TARGETS: '{{.ACTIONLINT_TARGETS}}'
+  yamllint:
+    taskfile: yamllint/Taskfile.yml
+    dir: ..
+    vars:
+      YAMLLINT_NIX_INSTALLABLE: '{{.YAMLLINT_NIX_INSTALLABLE}}'
+      YAMLLINT_UV_TOOL: '{{.YAMLLINT_UV_TOOL}}'
+      YAMLLINT_TARGETS: '{{.YAMLLINT_TARGETS}}'
+      YAMLLINT_CONFIG: '{{.YAMLLINT_CONFIG}}'
+      YAMLLINT_EXTRA_ARGS: '{{.YAMLLINT_EXTRA_ARGS}}'
+  yamlfix:
+    taskfile: yamlfix/Taskfile.yml
+    dir: ..
+    vars:
+      YAMLFIX_NIX_INSTALLABLE: '{{.YAMLFIX_NIX_INSTALLABLE}}'
+      YAMLFIX_UV_TOOL: '{{.YAMLFIX_UV_TOOL}}'
+      YAMLFIX_TARGETS: '{{.YAMLFIX_TARGETS}}'
+      YAMLFIX_EXTRA_ARGS: '{{.YAMLFIX_EXTRA_ARGS}}'
+  zizmor:
+    taskfile: zizmor/Taskfile.yml
+    dir: ..
+    vars:
+      ZIZMOR_EXTRA_ARGS: '{{.ZIZMOR_EXTRA_ARGS}}'
+      ZIZMOR_TARGETS: '{{.ZIZMOR_TARGETS}}'
+      ZIZMOR_NIX_INSTALLABLE: '{{.ZIZMOR_NIX_INSTALLABLE}}'
+      ZIZMOR_WINGET_INSTALLABLE: '{{.ZIZMOR_WINGET_INSTALLABLE}}'
+  adrs:
+    taskfile: adrs/Taskfile.yml
+    dir: ..
+    vars:
+      ADRS_NIX_INSTALLABLE: '{{.ADRS_NIX_INSTALLABLE}}'
+      ADRS_CARGO_CRATE: '{{.ADRS_CARGO_CRATE}}'
+      ADRS_EXTRA_ARGS: '{{.ADRS_EXTRA_ARGS}}'
+tasks:
+  ci:
+    desc: Run ci for synced TaskOtter modules
+    cmds:
+      - task: golangci-lint:ci
+      - task: actionlint:ci
+      - task: yamllint:ci
+      - task: zizmor:ci
+  ci:fix:
+    desc: Run ci:fix for synced TaskOtter modules
+    cmds:
+      - task: golangci-lint:ci:fix
+      - task: yamlfix:ci:fix
+  install:
+    desc: Run install for synced TaskOtter modules
+    cmds:
+      - task: go:install
+      - task: golangci-lint:install
+      - task: actionlint:install
+      - task: yamllint:install
+      - task: yamlfix:install
+      - task: zizmor:install
+      - task: adrs:install
+  version:
+    desc: Run version for synced TaskOtter modules
+    cmds:
+      - task: go:version
+      - task: golangci-lint:version
+      - task: actionlint:version
+      - task: yamllint:version
+      - task: yamlfix:version
+      - task: zizmor:version
+      - task: adrs:version

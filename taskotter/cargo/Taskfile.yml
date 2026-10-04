@@ -1,0 +1,339 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  winget:
+    taskfile: ../winget/Taskfile.yml
+
+vars:
+  CARGO_NIX_INSTALLABLE: '{{.CARGO_NIX_INSTALLABLE | default "nixpkgs#cargo"}}'
+  CARGO_WINGET_INSTALLABLE: '{{.CARGO_WINGET_INSTALLABLE | default "Rustlang.Rustup"}}'
+  # \$ so Task's POSIX shell (mvdan/sh) leaves literal $ for PowerShell.
+  # Reload User Path and prepend %USERPROFILE%\.cargo\bin so cargo and
+  # cargo-installed crates from earlier in this Task process are visible.
+  CARGO_LOAD: >-
+    {{.CARGO_LOAD | default `
+    \$u = [Environment]::GetEnvironmentVariable('Path', 'User');
+    if (\$u) { \$env:Path = \$u + ';' + \$env:Path };
+    \$cargoBin = Join-Path \$env:USERPROFILE '.cargo\bin';
+    if (Test-Path -LiteralPath \$cargoBin) { \$env:Path = \$cargoBin + ';' + \$env:Path }
+    `}}
+  RUST_TOOLCHAIN: '{{.RUST_TOOLCHAIN | default ""}}'
+  CARGO_EXTRA_ARGS: '{{.CARGO_EXTRA_ARGS | default ""}}'
+  CARGO_CRATE: '{{.CARGO_CRATE | default ""}}'
+
+tasks:
+  default:
+    run: once
+    desc: Show available Cargo automation tasks
+    summary: Display the list of available Cargo-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install cargo via Nix (Unix) or WinGet (Windows)
+    summary: |
+      Install cargo on Linux and macOS via the user Nix profile, and on
+      Windows via WinGet, when it is not already on PATH. Override
+      CARGO_NIX_INSTALLABLE or CARGO_WINGET_INSTALLABLE to pin a
+      different package or version.
+    status:
+      - command -v cargo >/dev/null 2>&1
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.CARGO_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - task: winget:install:package
+        vars:
+          WINGET_INSTALLABLE: '{{.CARGO_WINGET_INSTALLABLE}}'
+  version:
+    run: once
+    desc: Show the active Cargo version
+    summary: |
+      Print the version reported by the cargo binary resolved from PATH.
+      Auto-installs Cargo if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  install:crate:
+    desc: Install a crate with cargo install (CARGO_CRATE=name)
+    summary: |
+      Run cargo install CARGO_CRATE to install a binary crate from crates.io
+      or another source. Pass CARGO_EXTRA_ARGS for cargo flags such as --git,
+      --locked, or --force. Auto-installs the Rust toolchain if missing.
+      Must not use run: once: each caller passes a different CARGO_CRATE, and
+      skipping the second call leaves that crate uninstalled.
+    deps:
+      - task: install
+    requires:
+      vars:
+        - CARGO_CRATE
+    preconditions:
+      - sh: test -n "{{.CARGO_CRATE}}"
+        msg: CARGO_CRATE is required. Pass CARGO_CRATE=name when running this task.
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: install {{.CARGO_CRATE}}
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: install {{.CARGO_CRATE}}
+  build:
+    run: once
+    desc: Build the crate with cargo build (CARGO_EXTRA_ARGS=flags)
+    summary: |
+      Compile the crate in the current directory with `cargo build`. Pass
+      CARGO_EXTRA_ARGS for cargo flags such as --release or -p <crate>. Auto-installs
+      the Rust toolchain if needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: build
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: build
+  check:
+    run: once
+    desc: Type-check the crate with cargo check (CARGO_EXTRA_ARGS=flags)
+    summary: |
+      Check the crate in the current directory with `cargo check` without
+      producing binaries. Pass CARGO_EXTRA_ARGS for cargo flags. Auto-installs the
+      Rust toolchain if needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: check
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: check
+  test:
+    run: once
+    desc: Run the crate test suite with cargo test (CARGO_EXTRA_ARGS=flags)
+    summary: |
+      Run the crate's tests in the current directory with `cargo test`. Pass
+      CARGO_EXTRA_ARGS for cargo flags or test filters. Auto-installs the Rust
+      toolchain if needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: test
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: test
+  ci:
+    run: once
+    desc: Run cargo fmt:check then lint
+    cmds:
+      - task: fmt:check
+      - task: lint
+  ci:fix:
+    run: once
+    desc: Run cargo fmt then lint:fix
+    summary: |
+      Run fmt then lint:fix. Applies formatting and automatic lint fixes
+      suitable for CI autofix workflows.
+    cmds:
+      - task: fmt
+      - task: lint:fix
+  fmt:
+    run: once
+    desc: Format Rust code with cargo fmt (CARGO_EXTRA_ARGS=flags)
+    summary: |
+      Reformat Rust code in the current crate with `cargo fmt`. Pass CARGO_EXTRA_ARGS
+      for rustfmt options. Auto-installs the Rust toolchain if needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: fmt
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: fmt
+  fmt:check:
+    run: once
+    desc: Check Rust formatting with cargo fmt --check (CARGO_EXTRA_ARGS=flags)
+    summary: |
+      Report formatting differences in the current crate with
+      `cargo fmt --check` without modifying files. Pass CARGO_EXTRA_ARGS for rustfmt
+      options. Auto-installs the Rust toolchain if needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: fmt --check
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: fmt --check
+  lint:
+    run: once
+    desc: Lint Rust code with cargo clippy (CARGO_EXTRA_ARGS=flags)
+    summary: |
+      Lint the current crate with `cargo clippy`. Pass CARGO_EXTRA_ARGS for cargo or
+      clippy flags such as -- -D warnings. Auto-installs the Rust toolchain if
+      needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: clippy
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: clippy
+  lint:fix:
+    run: once
+    desc: Auto-fix Rust lint issues with cargo clippy --fix
+    summary: |
+      Apply clippy's automatic fixes to the current crate with
+      `cargo clippy --fix`. Pass CARGO_EXTRA_ARGS for cargo or clippy flags such as
+      --allow-dirty. Auto-installs the Rust toolchain if needed.
+    deps:
+      - task: install
+    cmds:
+      - task: _cargo:unix
+        vars:
+          CARGO_SUBCMD: clippy --fix
+      - task: _cargo:windows
+        vars:
+          CARGO_SUBCMD: clippy --fix
+  which:
+    run: once
+    desc: Show the path to the cargo binary
+    summary: Print the cargo binary resolved from PATH. Auto-installs the Rust toolchain if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _which:unix
+      - task: _which:windows
+  verify:
+    run: once
+    desc: Verify the Rust toolchain installation
+    summary: |
+      Print the active cargo and rustc versions for quick installation
+      diagnostics. Auto-installs the Rust toolchain if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _verify:unix
+      - task: _verify:windows
+  _which:unix:
+    run: once
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; command -v cargo'
+  _which:windows:
+    run: once
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.CARGO_LOAD}}; (Get-Command cargo).Source"
+  _verify:unix:
+    run: once
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; cargo --version; rustc --version'
+  _verify:windows:
+    run: once
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.CARGO_LOAD}};
+        cargo --version; rustc --version; exit \$LASTEXITCODE"
+  _cargo:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - |
+        bash -lc '{{.NIX_LOAD}};
+        cargo {{if .RUST_TOOLCHAIN}}+{{.RUST_TOOLCHAIN}} {{end}}{{.CARGO_SUBCMD}} \
+          {{.CARGO_EXTRA_ARGS}}'
+  _cargo:windows:
+    internal: true
+    platforms:
+      - windows
+    dir: '{{.USER_WORKING_DIR}}'
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.CARGO_LOAD}};
+        \$c = (Get-Command cargo -ErrorAction SilentlyContinue).Source;
+        if (-not \$c) { \$c = Join-Path \$env:USERPROFILE '.cargo\bin\cargo.exe' };
+        & \$c {{if .RUST_TOOLCHAIN}}+{{.RUST_TOOLCHAIN}} {{end}}{{.CARGO_SUBCMD}}
+          {{.CARGO_EXTRA_ARGS}};
+        exit \$LASTEXITCODE"
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show Cargo version on macOS or Linux
+    summary: Print the cargo version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; cargo --version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show Cargo version on Windows
+    summary: Print the cargo version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.CARGO_LOAD}};
+          if (Get-Command cargo -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: Cargo is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.CARGO_LOAD}}; cargo --version; exit \$LASTEXITCODE"

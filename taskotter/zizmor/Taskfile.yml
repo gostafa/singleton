@@ -1,0 +1,136 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  winget:
+    taskfile: ../winget/Taskfile.yml
+
+vars:
+  ZIZMOR_EXTRA_ARGS: '{{.ZIZMOR_EXTRA_ARGS | default "--offline"}}'
+  ZIZMOR_TARGETS: '{{.ZIZMOR_TARGETS | default ".github"}}'
+  ZIZMOR_NIX_INSTALLABLE: '{{.ZIZMOR_NIX_INSTALLABLE | default "nixpkgs#zizmor"}}'
+  ZIZMOR_WINGET_INSTALLABLE: '{{.ZIZMOR_WINGET_INSTALLABLE | default "zizmor.zizmor"}}'
+
+tasks:
+  default:
+    run: once
+    desc: Show available zizmor automation tasks
+    summary: Display the list of available zizmor-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install zizmor via Nix (Unix) or WinGet (Windows)
+    summary: |
+      Install zizmor on Linux and macOS via the user Nix profile, and on
+      Windows via WinGet, when it is not already on PATH. Override
+      ZIZMOR_NIX_INSTALLABLE or ZIZMOR_WINGET_INSTALLABLE to pin a
+      different package or version.
+    status:
+      - command -v zizmor >/dev/null 2>&1
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.ZIZMOR_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - task: winget:install:package
+        vars:
+          WINGET_INSTALLABLE: '{{.ZIZMOR_WINGET_INSTALLABLE}}'
+  version:
+    run: once
+    desc: Show the active zizmor version
+    summary: |
+      Print the version reported by the zizmor binary resolved from PATH.
+      Auto-installs zizmor if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  ci:
+    run: once
+    desc: Audit GitHub Actions workflows for security issues
+    summary: |
+      Run zizmor against ZIZMOR_TARGETS (default: .github) to detect security
+      issues in GitHub Actions workflows and composite actions such as
+      expression injection, excessive permissions, and dangerous patterns.
+      Runs offline by default (no GitHub token required); override with
+      ZIZMOR_EXTRA_ARGS="--gh-token $TOKEN" for online checks. Pass
+      ZIZMOR_EXTRA_ARGS for additional flags such as --format or
+      --min-severity, or CLI arguments after -- to override targets and options.
+      Auto-installs zizmor if missing.
+    dir: '{{.USER_WORKING_DIR}}'
+    deps:
+      - task: install
+    cmds:
+      - cmd: |
+          bash -lc '{{.NIX_LOAD}};
+          env -u GH_TOKEN zizmor \
+            {{if .CLI_ARGS}}{{.CLI_ARGS}} \
+            {{else}}{{.ZIZMOR_EXTRA_ARGS}} \
+            {{.ZIZMOR_TARGETS}}{{end}} \
+            && echo "✅ zizmor audit passed" || { echo "❌ zizmor audit found issues"; exit 1; }'
+        platforms:
+          - linux
+          - darwin
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}};
+          Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue;
+          \$zArgs = '{{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}
+          {{.ZIZMOR_EXTRA_ARGS}} {{.ZIZMOR_TARGETS}}{{end}}'.Trim().Split(' ',
+          [System.StringSplitOptions]::RemoveEmptyEntries);
+          & zizmor @zArgs;
+          exit \$LASTEXITCODE"
+        platforms:
+          - windows
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show zizmor version on macOS or Linux
+    summary: Print the zizmor version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; zizmor --version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show zizmor version on Windows
+    summary: Print the zizmor version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}};
+          if (Get-Command zizmor -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: zizmor is not installed or not available in PATH.
+    cmds:
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; zizmor --version; exit \$LASTEXITCODE"

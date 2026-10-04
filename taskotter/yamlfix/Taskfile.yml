@@ -1,0 +1,111 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  uv:
+    taskfile: ../uv/Taskfile.yml
+
+vars:
+  YAMLFIX_NIX_INSTALLABLE: '{{.YAMLFIX_NIX_INSTALLABLE | default "nixpkgs#yamlfix"}}'
+  YAMLFIX_UV_TOOL: '{{.YAMLFIX_UV_TOOL | default "yamlfix"}}'
+  YAMLFIX_TARGETS: '{{.YAMLFIX_TARGETS | default "."}}'
+  YAMLFIX_EXTRA_ARGS: '{{.YAMLFIX_EXTRA_ARGS | default ""}}'
+
+tasks:
+  default:
+    run: once
+    desc: Show available yamlfix automation tasks
+    summary: Display the list of available yamlfix-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install yamlfix via Nix (Unix) or uv tool (Windows)
+    summary: |
+      Install yamlfix into the user Nix profile on Linux and macOS when it
+      is not already on PATH. On Windows, installs via uv tool install
+      (YAMLFIX_UV_TOOL). Override YAMLFIX_NIX_INSTALLABLE or
+      YAMLFIX_UV_TOOL to pin a different package or version.
+    status:
+      - command -v yamlfix >/dev/null 2>&1
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.YAMLFIX_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - task: uv:tool:install
+        vars:
+          UV_TOOL: '{{.YAMLFIX_UV_TOOL}}'
+  version:
+    run: once
+    desc: Show the active yamlfix version
+    summary: |
+      Print the version reported by the yamlfix binary resolved from PATH.
+      Auto-installs yamlfix if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  ci:fix:
+    run: once
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Auto-fix YAML files with yamlfix (YAMLFIX_TARGETS=path)
+    summary: |
+      Run yamlfix against YAML files found under YAMLFIX_TARGETS (default .). Excludes
+      Taskfile.yml files whose Go template syntax is incompatible with yamlfix.
+      Pass YAMLFIX_EXTRA_ARGS for additional flags. Auto-installs yamlfix if missing.
+    deps:
+      - task: install
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; yamlfix {{.YAMLFIX_TARGETS}} {{.YAMLFIX_EXTRA_ARGS}}'
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show yamlfix version on macOS or Linux
+    summary: Print the yamlfix version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; yamlfix --version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show yamlfix version on Windows
+    summary: Print the yamlfix version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.UV_LOAD}};
+          if (Get-Command yamlfix -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: yamlfix is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.UV_LOAD}}; yamlfix --version; exit \$LASTEXITCODE"

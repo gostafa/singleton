@@ -1,0 +1,327 @@
+---
+version: '3.5'
+
+output:
+  group:
+    begin: ::group::{{.TASK}}
+    end: '::endgroup::'
+    error_only: false
+
+silent: true
+
+includes:
+  nix:
+    taskfile: ../nix/Taskfile.yml
+  winget:
+    taskfile: ../winget/Taskfile.yml
+
+vars:
+  GO_NIX_INSTALLABLE: '{{.GO_NIX_INSTALLABLE | default "nixpkgs#go"}}'
+  GO_WINGET_INSTALLABLE: '{{.GO_WINGET_INSTALLABLE | default "GoLang.Go"}}'
+  GO_FUZZTIME: '{{.GO_FUZZTIME | default ""}}'
+  GO_PKG: '{{.GO_PKG | default ""}}'
+  # \$ so Task's POSIX shell (mvdan/sh) leaves literal $ for PowerShell.
+  # Reload User Path (install:pkg writes GOPATH\bin there) and prepend
+  # GOPATH\bin so go-installed tools from earlier in this Task process are
+  # visible to later PowerShell cmds.
+  GO_LOAD: >-
+    {{.GO_LOAD | default `
+    \$u = [Environment]::GetEnvironmentVariable('Path', 'User');
+    if (\$u) { \$env:Path = \$u + ';' + \$env:Path };
+    if (Get-Command go -ErrorAction SilentlyContinue) {
+      \$goBin = Join-Path ((go env GOPATH).Trim()) 'bin';
+      if (Test-Path -LiteralPath \$goBin) { \$env:Path = \$goBin + ';' + \$env:Path }
+    }
+    `}}
+
+tasks:
+  default:
+    run: once
+    desc: Show available Go automation tasks
+    summary: Display the list of available Go-related tasks defined in this Taskfile.
+    cmds:
+      - task --list
+  install:
+    run: once
+    desc: Install Go via Nix (Unix) or WinGet (Windows)
+    summary: |
+      Install Go on Linux and macOS via the user Nix profile, and on
+      Windows via WinGet, when it is not already on PATH. Override
+      GO_NIX_INSTALLABLE or GO_WINGET_INSTALLABLE to pin a
+      different package or version.
+    cmds:
+      - task: _install:unix
+      - task: _install:windows
+  _install:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - task: nix:install:profile
+        vars:
+          NIX_INSTALLABLE: '{{.GO_NIX_INSTALLABLE}}'
+  _install:windows:
+    internal: true
+    platforms:
+      - windows
+    cmds:
+      - task: winget:install:package
+        vars:
+          WINGET_INSTALLABLE: '{{.GO_WINGET_INSTALLABLE}}'
+  install:pkg:
+    desc: Install a Go package with go install (GO_PKG=module@version)
+    summary: |
+      Run go install GO_PKG to install a Go module binary onto GOPATH/bin.
+      Pass GO_PKG as a module path with version, for example
+      github.com/example/cmd@latest. Auto-installs Go if missing. On Windows,
+      idempotently prepends $(go env GOPATH)\bin to the User Path when absent
+      so the installed binary is discoverable. Must not use run: once: each
+      caller passes a different GO_PKG, and skipping the second call leaves
+      that package uninstalled.
+    deps:
+      - task: install
+    requires:
+      vars:
+        - GO_PKG
+    preconditions:
+      - sh: test -n "{{.GO_PKG}}"
+        msg: GO_PKG is required. Pass GO_PKG=module@version when running this task.
+    cmds:
+      - task: _install:pkg:unix
+        vars:
+          GO_PKG: '{{.GO_PKG}}'
+      - task: _install:pkg:windows
+        vars:
+          GO_PKG: '{{.GO_PKG}}'
+  _install:pkg:unix:
+    internal: true
+    platforms:
+      - linux
+      - darwin
+    requires:
+      vars:
+        - GO_PKG
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; go install "{{.GO_PKG}}"'
+  _install:pkg:windows:
+    internal: true
+    platforms:
+      - windows
+    requires:
+      vars:
+        - GO_PKG
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; go install '{{.GO_PKG}}'; exit \$LASTEXITCODE"
+      # \$ so Task's POSIX shell leaves literal $ for PowerShell.
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; \$ErrorActionPreference = 'Stop';
+        \$goBin = Join-Path ((go env GOPATH).Trim()) 'bin';
+        \$userPath = [Environment]::GetEnvironmentVariable('Path', 'User');
+        if (-not \$userPath) { \$userPath = '' };
+        \$normalized = \$goBin.TrimEnd('\');
+        \$found = \$false;
+        foreach (\$part in (\$userPath -split ';')) {
+          if (\$part -and \$part.TrimEnd('\').Equals(\$normalized, [StringComparison]::OrdinalIgnoreCase)) {
+            \$found = \$true; break
+          }
+        };
+        if (-not \$found) {
+          \$newPath = if (\$userPath) { (\$goBin + ';' + \$userPath) } else { \$goBin };
+          [Environment]::SetEnvironmentVariable('Path', \$newPath, 'User')
+        };
+        \$env:Path = \$goBin + ';' + \$env:Path"
+  version:
+    run: once
+    desc: Show the active Go version
+    summary: |
+      Print the version reported by the go binary resolved from PATH.
+      Auto-installs Go if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _version:unix
+      - task: _version:windows
+  which:
+    run: once
+    desc: Show the path to the Go binary
+    summary: Print the Go binary resolved from PATH. Auto-installs Go if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _which:unix
+      - task: _which:windows
+  verify:
+    run: once
+    desc: Verify the Go installation and environment
+    summary: |
+      Check that Go is installed, print the active version, and show the
+      resolved GOROOT and GOPATH values for quick installation diagnostics.
+      Auto-installs Go if missing.
+    deps:
+      - task: install
+    cmds:
+      - task: _verify:unix
+      - task: _verify:windows
+  test:
+    run: once
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Run Go unit tests
+    summary: |
+      Run `go test -v` against all Go packages by default. Pass CLI arguments
+      after -- to override the default ./... target or add flags. For converting a
+      go test log to JUnit XML, use go-junit-report:report.
+    deps:
+      - task: install
+    cmds:
+      - cmd: >-
+          bash -lc '{{.NIX_LOAD}}; go test -v
+          {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}}'
+        platforms:
+          - linux
+          - darwin
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.GO_LOAD}}; go test -v {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}};
+          exit \$LASTEXITCODE"
+        platforms:
+          - windows
+  bench:
+    run: once
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Run Go benchmarks
+    summary: |
+      Run `go test` benchmarks (-bench .) with memory statistics and no
+      unit-test execution (-run '^$'). Pass CLI arguments after -- to override
+      the default ./... target or the -bench pattern, for example:
+      `task go:bench -- -bench BenchmarkName ./internal/parser`.
+    deps:
+      - task: install
+    cmds:
+      - cmd: >-
+          bash -lc '{{.NIX_LOAD}}; go test -run "^$" -bench . -benchmem
+          {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}}'
+        platforms:
+          - linux
+          - darwin
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.GO_LOAD}}; go test -run '^\$' -bench . -benchmem
+          {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}./...{{end}};
+          exit \$LASTEXITCODE"
+        platforms:
+          - windows
+  fuzz:
+    run: once
+    dir: '{{.USER_WORKING_DIR}}'
+    desc: Run a Go fuzz target
+    summary: |
+      Run a Go fuzz target for a bounded duration (GO_FUZZTIME, default 30s). Go
+      fuzzes a single target in one package per run, so pass the -fuzz pattern
+      and package after --, for example:
+      `task go:fuzz -- -fuzz FuzzName ./internal/parser`.
+    deps:
+      - task: install
+    vars:
+      GO_FUZZ_TIME: '{{if .GO_FUZZTIME}}{{.GO_FUZZTIME}}{{else}}30s{{end}}'
+    cmds:
+      - cmd: >-
+          bash -lc '{{.NIX_LOAD}}; go test -run "^$" -fuzztime "{{.GO_FUZZ_TIME}}"
+          {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}-fuzz . .{{end}}'
+        platforms:
+          - linux
+          - darwin
+      - cmd: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.GO_LOAD}}; go test -run '^\$' -fuzztime '{{.GO_FUZZ_TIME}}'
+          {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}-fuzz . .{{end}};
+          exit \$LASTEXITCODE"
+        platforms:
+          - windows
+  _which:unix:
+    run: once
+    internal: true
+    desc: Show Go binary path on macOS or Linux
+    summary: Print the Go binary path resolved by the current PATH on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; command -v go'
+  _which:windows:
+    run: once
+    internal: true
+    desc: Show Go binary path on Windows
+    summary: Print the Go binary path resolved by PowerShell on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.GO_LOAD}};
+          if (Get-Command go -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: Go is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.GO_LOAD}}; (Get-Command go).Source"
+  _verify:unix:
+    run: once
+    internal: true
+    desc: Verify Go on macOS or Linux
+    summary: Print Go version, GOROOT, and GOPATH on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; go version; go env GOROOT GOPATH'
+  _verify:windows:
+    run: once
+    internal: true
+    desc: Verify Go on Windows
+    summary: Print Go version, GOROOT, and GOPATH on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.GO_LOAD}};
+          if (Get-Command go -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: Go is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.GO_LOAD}}; go version; go env GOROOT GOPATH; exit \$LASTEXITCODE"
+  _version:unix:
+    run: once
+    internal: true
+    desc: Show Go version on macOS or Linux
+    summary: Print the go version on macOS or Linux.
+    platforms:
+      - linux
+      - darwin
+    cmds:
+      - bash -lc '{{.NIX_LOAD}}; go version'
+  _version:windows:
+    run: once
+    internal: true
+    desc: Show Go version on Windows
+    summary: Print the go version on Windows.
+    platforms:
+      - windows
+    preconditions:
+      - sh: >-
+          powershell -NoProfile -ExecutionPolicy Bypass -Command
+          "{{.WINGET_LOAD}}; {{.GO_LOAD}};
+          if (Get-Command go -ErrorAction SilentlyContinue) {
+          exit 0 } else { exit 1 }"
+        msg: Go is not installed or not available in PATH.
+    cmds:
+      - >-
+        powershell -NoProfile -ExecutionPolicy Bypass -Command
+        "{{.WINGET_LOAD}}; {{.GO_LOAD}}; go version; exit \$LASTEXITCODE"
