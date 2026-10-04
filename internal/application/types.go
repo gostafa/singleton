@@ -1,9 +1,10 @@
 package application
 
 import (
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 	"sync"
 	"sync/atomic"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 )
 
 // Provider lazily initializes and returns one shared value.

@@ -3,11 +3,12 @@ package application_test
 import (
 	"context"
 	"errors"
-	"github.com/mostafakhairy0305-dot/singleton/internal/application"
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/application"
+	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
 )
 
 var (

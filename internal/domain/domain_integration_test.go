@@ -2,10 +2,11 @@ package domain_test
 
 import (
 	"errors"
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 // unknownReason is what [FailureReason.String] falls back to.

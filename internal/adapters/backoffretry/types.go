@@ -1,8 +1,9 @@
 package backoffretry
 
 import (
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"time"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 // Config tunes the retry policy.

@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 	"testing"
 	"time"
+
+	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
+	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
 )
 
 var (

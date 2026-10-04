@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/mostafakhairy0305-dot/singleton"
 	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mostafakhairy0305-dot/singleton"
 )
 
 var errFactory = errors.New("factory failed")

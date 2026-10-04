@@ -3,14 +3,13 @@ package backoffretry
 import (
 	"context"
 	"errors"
+	"testing"
+
 	"github.com/cenkalti/backoff/v7"
 	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
-	"testing"
 )
 
-var (
-	errBoom = errors.New("boom")
-)
+var errBoom = errors.New("boom")
 
 func requireInitError(t *testing.T, err error) *domain.InitError {
 	t.Helper()
