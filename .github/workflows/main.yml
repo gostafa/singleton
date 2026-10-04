@@ -29,3 +29,8 @@ jobs:
         uses: $/.github/actions/ci
         with:
           github-token: ${{ github.token }}
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@c4fd08a3a159bd0cc208da1e0edf32b8c47d75e5  # v5.4.0
+        with:
+          mode: walltime
+          run: go test -bench . ./...
