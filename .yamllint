@@ -1,25 +1,67 @@
 ---
 extends: default
 
-ignore: [taskfiles/**, .taskotter/**]
+ignore: |
+  **/node_modules/
 
 rules:
+  key-duplicates: enable
+
   comments:
     min-spaces-from-content: 1
+    require-starting-space: true
 
   comments-indentation: false
+
+  empty-lines:
+    max: 1
+    max-start: 0
+    max-end: 0
+
+  document-start:
+    present: true
+
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  hyphens:
+    max-spaces-after: 1
+
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  empty-values:
+    forbid-in-block-mappings: true
+    forbid-in-flow-mappings: true
+
+  quoted-strings: disable
+
+  trailing-spaces: enable
+  new-line-at-end-of-file: enable
+
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 0
 
   braces:
     min-spaces-inside: 0
     max-spaces-inside: 1
 
-  octal-values:
-    forbid-implicit-octal: true
-    forbid-explicit-octal: true
+  commas:
+    max-spaces-before: 0
+    min-spaces-after: 1
+    max-spaces-after: 1
 
-  line-length:
-    max: 140
-    level: warning
+  colons:
+    max-spaces-before: 0
+    max-spaces-after: 1
 
   truthy:
     allowed-values: ["true", "false", "on", "off", "yes", "no"]
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

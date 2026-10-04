@@ -1,130 +1,15 @@
 ---
-version: "3"
+version: '3.5'
 
 includes:
-    taskotter:
-        taskfile: taskfiles/Taskfile.yml
-vars:
-    GOOS_LIST: [linux, darwin, windows]
+  taskotter:
+    taskfile: taskotter/Taskfile.yml
+    vars:
+      YAMLFIX_EXTRA_ARGS: --exclude "taskotter/**/*"
+
 tasks:
-    ci:
-        desc: Run Ci checks
-        cmds:
-            - task: fmt:check
-            - task: lint
-            - task: test
-            - task: test:race
-            - task: vet
-            - task: cover
-            - task: crosscheck
-    ci:fix:
-        desc: Run Ci fixing
-        cmds:
-            - task: fmt
-            - task: lint:fix
-    lint:
-        run: once
-        desc: Run every lint check from the included taskfiles
-        summary: |
-            Fan out to the lint tasks of all included taskfiles: Go (golangci-lint,
-            formatters, govulncheck, gosec), staticcheck, actionlint, yamllint,
-            zizmor, and shellcheck.
-        deps:
-            - taskotter:go:lint
-            - taskotter:staticcheck:lint
-            - taskotter:actionlint:lint
-            - taskotter:yamllint:lint
-            - taskotter:zizmor:lint
-            - taskotter:shellcheck:lint
-    lint:fix:
-        run: once
-        desc: Auto-fix lint issues across the included taskfiles
-        summary: |
-            Run the auto-fixing lint tasks of the included taskfiles: golangci-lint
-            --fix plus Go formatters, and yamlfix for YAML files. Tools without a
-            fix mode (staticcheck, actionlint, zizmor, shellcheck) are skipped;
-            run lint to see their findings.
-        cmds:
-            - task: taskotter:go:lint:fix
-            - task: taskotter:yamllint:lint:fix
-    fmt:
-        run: once
-        desc: Format sources across the included taskfiles
-        summary: |
-            Rewrite files with the formatters of the included taskfiles: Go files via
-            golangci-lint formatters and YAML files via yamlfix.
-        cmds:
-            - task: taskotter:go:fmt
-            - task: taskotter:yamllint:lint:fix
-    fmt:check:
-        run: once
-        desc: Check formatting across the included taskfiles without writing
-        summary: |
-            Verify formatting without modifying files: Go files via golangci-lint
-            formatters and YAML files via yamllint. Use fmt to apply fixes.
-        deps:
-            - taskotter:go:fmt:check
-            - taskotter:yamllint:lint
-    test:
-        run: once
-        desc: Run the Go test suite (TARGET=./...)
-        summary: |
-            Run go test against TARGET (default ./...). Pass CLI arguments
-            after -- to override the target or add flags, for example
-            task test -- -run TestOpen ./geo.
-        cmds:
-            - >-
-              go test {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}{{default "./..." .TARGET}}{{end}}
-    test:race:
-        run: once
-        aliases: [race]
-        desc: Run the Go test suite under the race detector (TARGET=./...)
-        summary: |
-            The hub, the lifecycle tracker, and the fixed clock are all driven
-            from several goroutines at once, so -race is what makes this run
-            worth its extra time. Pass CLI arguments after -- to override the
-            target.
-        cmds:
-            - >-
-              go test -race {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}{{default "./..." .TARGET}}{{end}}
-    vet:
-        run: once
-        desc: Vet the module for the host operating system (TARGET=./...)
-        summary: |
-            Run go vet against TARGET (default ./...). Use crosscheck to vet the
-            operating systems this host does not compile.
-        cmds:
-            - >-
-              go vet {{if .CLI_ARGS}}{{.CLI_ARGS}}{{else}}{{default "./..." .TARGET}}{{end}}
-    crosscheck:
-        run: once
-        desc: Vet the module for every supported operating system
-        summary: |
-            The three native adapters compile only on their own operating
-            system, so a host-only vet says nothing about two thirds of the
-            provider feature. Override the list with GOOS_LIST="linux darwin".
-        cmds:
-            - for: {var: GOOS_LIST}
-              cmd: GOOS={{.ITEM}} go vet {{default "./..." .TARGET}}
-    cover:
-        run: once
-        desc: Run the per-package coverage gate (COVERAGE_THRESHOLD=100)
-        summary: |
-            scripts/cover.sh owns the floor and the native-adapter exclusions,
-            and CI runs the same script. Relax the floor for a single run with
-            task cover COVERAGE_THRESHOLD=90.
-        env:
-            COVERAGE_THRESHOLD: "{{.COVERAGE_THRESHOLD}}"
-        cmds:
-            - ./scripts/cover.sh
-    cover:html:
-        run: once
-        aliases: [cover-html]
-        desc: Run the coverage gate and write cover.html for local drill-down
-        summary: |
-            Same gate as cover, plus an HTML report at cover.html. The gate
-            still fails the task when a package is below the floor.
-        env:
-            COVERAGE_THRESHOLD: "{{.COVERAGE_THRESHOLD}}"
-        cmds:
-            - ./scripts/cover.sh --html
+  default:
+    run: once
+    desc: Show all available TaskOtter tasks
+    cmds:
+      - task --list-all

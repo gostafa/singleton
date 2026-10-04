@@ -1,11 +1,22 @@
 ---
-name: Go Lint
-description: Run formatting and lint checks
+name: Go CI
+description: Run Task-based CI, autofix issues, generate test reports, and upload coverage/results to Codecov
+
+inputs:
+  github-token:
+    description: GitHub token used for automated fixes
+    required: true
+
 runs:
   using: composite
   steps:
-    - name: Prepare Go project
-      uses: ./.github/actions/setup
     - name: Run CI
       shell: bash
-      run: task ci
+      run: YAMLFIX_EXTRA_ARGS='--exclude ".github/workflows/**/*" --exclude "taskotter/**/*"' task taskotter:ci:fix
+    - name: Create fix PR
+      uses: $/.github/actions/auto-fix
+      with:
+        token: ${{ inputs.github-token }}
+    - name: Run all CI checks
+      shell: bash
+      run: task taskotter:ci
