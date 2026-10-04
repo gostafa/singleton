@@ -1,5 +1,5 @@
 ---
-name: Validate and deploy
+name: CI
 
 on:
   push: null
@@ -7,7 +7,7 @@ on:
 
 jobs:
   pipeline:
-    name: Validate repository and deploy application
+    name: CI
     runs-on: ubuntu-latest
     permissions:
       contents: write
