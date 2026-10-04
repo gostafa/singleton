@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package application
 
 import (
@@ -12,20 +15,17 @@ import (
 // Build one with [NewProvider]. The zero value is not usable and a Provider
 // must not be copied after first use. It is safe for concurrent use.
 type Provider[T any] struct {
-	factory ports.Operation[T]
 	retrier ports.Retrier[T]
-
-	mu      sync.Mutex
+	factory ports.Operation[T]
 	current atomic.Pointer[state[T]]
+	mu      sync.Mutex
 }
 
 type state[T any] struct {
-	settled atomic.Bool
-	done    chan struct{}
-
-	value T
-	err   error
-
-	panicked   bool
+	value      T
+	err        error
 	panicValue any
+	done       chan struct{}
+	settled    atomic.Bool
+	panicked   bool
 }

@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package application_test
 
 import (
@@ -65,7 +68,7 @@ func TestGetInitializesOnceAndCachesTheValue(t *testing.T) {
 	}, onceRetrier[int]{})
 
 	for range 3 {
-		got, err := provider.Get(context.Background())
+		got, err := provider.Get(t.Context())
 		if err != nil {
 			t.Fatalf("Get() error = %v, want nil", err)
 		}
@@ -92,7 +95,7 @@ func TestGetCachesTheFailure(t *testing.T) {
 	}, onceRetrier[int]{})
 
 	for range 2 {
-		got, err := provider.Get(context.Background())
+		got, err := provider.Get(t.Context())
 		if !errors.Is(err, errInit) {
 			t.Fatalf("Get() error = %v, want %v", err, errInit)
 		}
@@ -116,7 +119,7 @@ func TestGetSurfacesARetrierFailureWithoutRunningTheFactory(t *testing.T) {
 		return 0, nil
 	}, failingRetrier[int]{})
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	if !errors.Is(err, errNoRetry) {
 		t.Errorf("Get() error = %v, want %v", err, errNoRetry)
 	}
@@ -136,7 +139,7 @@ func TestGetRePanicsWithTheFactoryPanic(t *testing.T) {
 	// The first Get re-panics from the settling state, the second from the
 	// cached one.
 	for range 2 {
-		got := recoveredValue(t, func() { _, _ = provider.Get(context.Background()) })
+		got := recoveredValue(t, func() { _, _ = provider.Get(t.Context()) })
 		if got != "factory exploded" {
 			t.Errorf("recovered %v, want %q", got, "factory exploded")
 		}
@@ -169,7 +172,7 @@ func TestGetPanicsOnTheZeroProvider(t *testing.T) {
 
 	const want = "singleton: Provider must be created with New or MustNew"
 
-	got := recoveredValue(t, func() { _, _ = provider.Get(context.Background()) })
+	got := recoveredValue(t, func() { _, _ = provider.Get(t.Context()) })
 	if got != want {
 		t.Errorf("recovered %v, want %q", got, want)
 	}
@@ -187,7 +190,7 @@ func TestGetStopsWaitingWhenTheCallerContextEnds(t *testing.T) {
 		return 7, nil
 	}, onceRetrier[int]{})
 
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	cancel(errGaveUp)
 
 	got, err := provider.Get(ctx)
@@ -214,7 +217,7 @@ func TestResetBeforeTheFirstGetDoesNothing(t *testing.T) {
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
@@ -237,14 +240,14 @@ func TestResetDiscardsAFailedInitialization(t *testing.T) {
 		return 5, nil
 	}, onceRetrier[int]{})
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	if !errors.Is(err, errInit) {
 		t.Fatalf("Get() error = %v, want %v", err, errInit)
 	}
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -267,11 +270,11 @@ func TestResetDiscardsAPanickedInitialization(t *testing.T) {
 		return 5, nil
 	}, onceRetrier[int]{})
 
-	_ = recoveredValue(t, func() { _, _ = provider.Get(context.Background()) })
+	_ = recoveredValue(t, func() { _, _ = provider.Get(t.Context()) })
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -290,14 +293,14 @@ func TestResetKeepsASuccessfulValue(t *testing.T) {
 		return int(calls.Add(1)), nil
 	}, onceRetrier[int]{})
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -323,14 +326,14 @@ func TestResetLeavesAnInFlightInitializationAlone(t *testing.T) {
 		return 7, nil
 	}, onceRetrier[int]{})
 
-	// Start initialization without waiting for it: an already-cancelled caller
+	// Start initialization without waiting for it: an already-canceled caller
 	// abandons its wait the instant the state exists.
-	abandoned, cancel := context.WithCancel(context.Background())
+	abandoned, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	_, abandonedErr := provider.Get(abandoned)
 	if abandonedErr == nil {
-		t.Fatal("Get() with a cancelled context returned no error")
+		t.Fatal("Get() with a canceled context returned no error")
 	}
 
 	<-entered
@@ -339,7 +342,7 @@ func TestResetLeavesAnInFlightInitializationAlone(t *testing.T) {
 
 	close(release)
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
@@ -378,7 +381,7 @@ func TestConcurrentGetsShareOneInitialization(t *testing.T) {
 
 			<-start
 
-			got, err := provider.Get(context.Background())
+			got, err := provider.Get(t.Context())
 			if err != nil || got != 21 {
 				t.Errorf("Get() = (%d, %v), want (21, nil)", got, err)
 			}

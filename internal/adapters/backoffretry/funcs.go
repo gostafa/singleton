@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package backoffretry
 
 import (
@@ -30,6 +33,7 @@ func (r *Retrier[T]) Do(ctx context.Context, operation ports.Operation[T]) (T, e
 	defer cancel()
 
 	policy := backoff.NewExponentialBackOff()
+
 	policy.InitialInterval = r.cfg.InitialInterval
 	policy.MaxInterval = r.cfg.MaxInterval
 	policy.Multiplier = multiplier

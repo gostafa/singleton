@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package singleton
 
 import (
@@ -15,7 +18,7 @@ const (
 	// FailureTimedOut means the deadline set by WithInitializationTimeout elapsed.
 	FailureTimedOut
 
-	// FailureCanceled means the initialization context was cancelled.
+	// FailureCanceled means the initialization context was canceled.
 	// No current code path produces it; it is reserved for a future shutdown hook.
 	FailureCanceled
 )

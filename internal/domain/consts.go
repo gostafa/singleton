@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package domain
 
 const (
@@ -11,7 +14,7 @@ const (
 	// FailureTimedOut means the initialization deadline elapsed.
 	FailureTimedOut
 
-	// FailureCanceled means the initialization context was cancelled.
+	// FailureCanceled means the initialization context was canceled.
 	FailureCanceled
 )
 

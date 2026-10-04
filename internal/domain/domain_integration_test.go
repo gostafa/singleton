@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package domain_test
 
 import (
@@ -26,8 +29,8 @@ func TestFailureReasonString(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
-		reason domain.FailureReason
 		want   string
+		reason domain.FailureReason
 	}{
 		"permanent":         {reason: domain.FailurePermanent, want: "permanent failure"},
 		"exhausted":         {reason: domain.FailureExhausted, want: "retries exhausted"},
@@ -129,6 +132,7 @@ func TestPermanentWrapsTheError(t *testing.T) {
 	got := domain.Permanent(errFactory)
 
 	var permanent *domain.PermanentError
+
 	if !errors.As(got, &permanent) {
 		t.Fatalf("errors.As(%v, *PermanentError) = false, want true", got)
 	}

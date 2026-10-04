@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package domain
 
 import (
@@ -19,14 +22,9 @@ type FailureReason uint8
 //
 // Build one with [NewInitError].
 type InitError struct {
-	// Reason reports why initialization stopped. It is the authoritative
-	// classification.
+	Err    error
+	chain  []error
 	Reason FailureReason
-
-	// Err is the last error the factory returned.
-	Err error
-
-	chain []error
 }
 
 // PermanentError marks a factory error as non-retriable.
@@ -39,13 +37,8 @@ type PermanentError struct {
 
 // RetryEvent describes a failed attempt that will be retried.
 type RetryEvent struct {
-	// Attempt is the 1-based number of the attempt that just failed.
-	Attempt uint
-
-	// Err is why that attempt failed.
-	Err error
-
-	// NextDelay is how long the policy waits before the next attempt.
+	Err       error
+	Attempt   uint
 	NextDelay time.Duration
 }
 

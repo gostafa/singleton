@@ -3,7 +3,7 @@
 // A [Provider] initializes one shared value on first use and returns that same
 // value to every later caller. Initialization runs on its own goroutine under a
 // context owned by this package, while Get waits under the caller's context.
-// Cancelling a caller therefore stops only that caller waiting: a request that
+// Canceling a caller therefore stops only that caller waiting: a request that
 // times out cannot poison the singleton for the rest of the process.
 //
 // Failed attempts are retried with exponential backoff and jitter until the

@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package ports
 
 import (
@@ -12,7 +15,7 @@ type Operation[T any] func(context.Context) (T, error)
 
 // Retrier runs an operation until it succeeds or its policy gives up.
 //
-// Implementations must honour three rules, each of which exists because
+// Implementations must honor three rules, each of which exists because
 // violating it caused a real defect:
 //
 //   - Run the operation at least once.

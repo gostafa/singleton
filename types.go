@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package singleton
 
 import (
@@ -21,13 +24,9 @@ type FailureReason uint8
 // context.DeadlineExceeded on every attempt exhausts its retry budget, so
 // Reason is FailureExhausted even though errors.Is matches context.DeadlineExceeded.
 type InitError struct {
-	// Reason reports why initialization stopped. It is the authoritative classification.
+	Err    error
+	chain  []error
 	Reason FailureReason
-
-	// Err is the last error the factory returned.
-	Err error
-
-	chain []error
 }
 
 // PermanentError marks a factory error as non-retriable.
@@ -52,13 +51,8 @@ type config struct {
 // RetryEvent describes a failed attempt that will be retried. It is delivered
 // to the observer registered with WithRetryObserver.
 type RetryEvent struct {
-	// Attempt is the 1-based number of the attempt that just failed.
-	Attempt uint
-
-	// Err is why that attempt failed.
-	Err error
-
-	// NextDelay is how long the policy waits before the next attempt.
+	Err       error
+	Attempt   uint
 	NextDelay time.Duration
 }
 
@@ -89,7 +83,7 @@ type Provider[T any] struct {
 	provider *application.Provider[T]
 }
 
-// Interface is the behaviour [Provider] implements.
+// Interface is the behavior [Provider] implements.
 //
 // Depend on it in consumers that need to substitute a fake.
 type Interface[T any] interface {

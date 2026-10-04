@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package singleton
 
 import (
@@ -14,8 +17,8 @@ func TestPublicInitErrorReplacesInternalStopCauses(t *testing.T) {
 	t.Parallel()
 
 	tests := map[domain.FailureReason]struct {
-		reason FailureReason
 		cause  error
+		reason FailureReason
 	}{
 		domain.FailurePermanent: {reason: FailurePermanent, cause: ErrPermanent},
 		domain.FailureExhausted: {reason: FailureExhausted, cause: ErrRetriesExhausted},

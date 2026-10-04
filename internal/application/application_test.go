@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package application
 
 import (
@@ -24,12 +27,13 @@ func TestAbandonReturnsTheResultWhenInitializationWinsTheRace(t *testing.T) {
 	t.Parallel()
 
 	current := new(state[int])
+
 	current.done = make(chan struct{})
 	current.value = 99
 	current.settled.Store(true)
 	close(current.done)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	got, err := current.abandon(ctx)
@@ -52,6 +56,7 @@ func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
 	}, onceRetrier[int]{})
 
 	existing := new(state[int])
+
 	existing.done = make(chan struct{})
 	existing.value = 11
 	existing.settled.Store(true)

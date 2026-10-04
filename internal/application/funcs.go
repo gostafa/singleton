@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package application
 
 import (
@@ -13,6 +16,7 @@ func NewProvider[T any](
 	retrier ports.Retrier[T],
 ) *Provider[T] {
 	provider := new(Provider[T])
+
 	provider.factory = factory
 	provider.retrier = retrier
 
@@ -92,6 +96,7 @@ func (p *Provider[T]) load() *state[T] {
 	}
 
 	current := new(state[T])
+
 	current.done = make(chan struct{})
 
 	p.current.Store(current)

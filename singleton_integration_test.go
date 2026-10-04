@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package singleton_test
 
 import (
@@ -39,6 +42,7 @@ func asInitError(t *testing.T, err error) *singleton.InitError {
 	t.Helper()
 
 	var initErr *singleton.InitError
+
 	if !errors.As(err, &initErr) {
 		t.Fatalf("error = %v, want *singleton.InitError", err)
 	}
@@ -86,7 +90,7 @@ func TestPublicTypesBelongToSingleton(t *testing.T) {
 
 	var provider singleton.Interface[int] = singleton.MustNew(successfulFactory)
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if got != 42 || err != nil {
 		t.Errorf("Get() = (%d, %v), want (42, nil)", got, err)
 	}
@@ -96,8 +100,8 @@ func TestPublicFailureReasons(t *testing.T) {
 	t.Parallel()
 
 	tests := map[singleton.FailureReason]struct {
-		value uint8
 		name  string
+		value uint8
 	}{
 		singleton.FailurePermanent: {value: 1, name: "permanent failure"},
 		singleton.FailureExhausted: {value: 2, name: "retries exhausted"},
@@ -118,9 +122,9 @@ func TestPublicConstructionErrors(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]struct {
+		want    error
 		factory singleton.Factory[int]
 		options []singleton.Option
-		want    error
 	}{
 		"nil factory": {factory: nil, options: nil, want: singleton.ErrNilFactory},
 		"zero option": {
@@ -172,6 +176,7 @@ func TestPublicPermanentError(t *testing.T) {
 	err := singleton.Permanent(errFactory)
 
 	var permanent *singleton.PermanentError
+
 	if !errors.As(err, &permanent) {
 		t.Fatalf("Permanent() = %T, want *singleton.PermanentError", err)
 	}
@@ -205,7 +210,7 @@ func TestPublicPermanentErrorsStopRetrying(t *testing.T) {
 				return 99, marker
 			}, quickOptions()...)
 
-			value, err := provider.Get(context.Background())
+			value, err := provider.Get(t.Context())
 			initErr := asInitError(t, err)
 
 			assertEqual(t, "value", value, 0)
@@ -231,7 +236,7 @@ func TestPublicInitErrorIsCachedAndReset(t *testing.T) {
 		return 42, nil
 	}, quickOptions()...)
 
-	value, err := provider.Get(context.Background())
+	value, err := provider.Get(t.Context())
 	initErr := asInitError(t, err)
 
 	assertEqual(t, "value", value, 0)
@@ -240,20 +245,21 @@ func TestPublicInitErrorIsCachedAndReset(t *testing.T) {
 	assertErrorIs(t, err, singleton.ErrRetriesExhausted)
 	assertErrorIs(t, err, errFactory)
 
-	_, cached := provider.Get(context.Background())
+	_, cached := provider.Get(t.Context())
 
 	assertEqual(t, "cached error identity", cached, err)
 	assertEqual(t, "attempts", attempts.Load(), uint32(3))
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 
 	assertEqual(t, "value after Reset", got, 42)
 	assertEqual(t, "error after Reset", err, nil)
 
 	provider.Reset()
-	_, _ = provider.Get(context.Background())
+
+	_, _ = provider.Get(t.Context())
 
 	assertEqual(t, "attempts after resetting success", attempts.Load(), uint32(4))
 }
@@ -267,7 +273,7 @@ func TestPublicInitializationTimeout(t *testing.T) {
 		return 99, errFactory
 	}, singleton.WithInitializationTimeout(20*time.Millisecond))
 
-	value, err := provider.Get(context.Background())
+	value, err := provider.Get(t.Context())
 	initErr := asInitError(t, err)
 
 	assertEqual(t, "value", value, 0)
@@ -284,7 +290,7 @@ func TestPublicReasonDoesNotComeFromFactoryError(t *testing.T) {
 		return 0, context.DeadlineExceeded
 	}, quickOptions()...)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	initErr := asInitError(t, err)
 
 	if initErr.Reason != singleton.FailureExhausted ||
@@ -292,6 +298,7 @@ func TestPublicReasonDoesNotComeFromFactoryError(t *testing.T) {
 			err,
 			singleton.ErrRetriesExhausted,
 		) || !errors.Is(err, context.DeadlineExceeded) {
+
 		t.Errorf("Get() = %v, want exhausted retries wrapping the factory's deadline error", err)
 	}
 }
@@ -307,7 +314,7 @@ func TestPublicRetryEvents(t *testing.T) {
 		events = append(events, event)
 	}))...)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	if !errors.Is(err, singleton.ErrRetriesExhausted) || len(events) != 2 {
 		t.Fatalf("Get() = %v, events = %v, want exhaustion and 2 events", err, events)
 	}
@@ -339,7 +346,7 @@ func TestPublicObserverPanicIsDiscarded(t *testing.T) {
 		panic("observer panic")
 	}))...)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	if !errors.Is(err, singleton.ErrRetriesExhausted) || events.Load() != 2 {
 		t.Errorf("Get() = %v, events = %d, want exhausted retries and 2 events", err, events.Load())
 	}
@@ -351,6 +358,7 @@ func TestPublicInitErrorLiteral(t *testing.T) {
 	initErr := &singleton.InitError{Reason: singleton.FailureExhausted, Err: errFactory}
 	if initErr.Error() != "singleton: retries exhausted: factory failed" ||
 		!errors.Is(initErr, errFactory) || errors.Unwrap(initErr) != nil {
+
 		t.Errorf("InitError literal = %v, unwrap = %v", initErr, initErr.Unwrap())
 	}
 
@@ -372,7 +380,7 @@ func TestPublicCallerCancellationIsIsolated(t *testing.T) {
 		return 42, ctx.Err()
 	})
 
-	ctx, cancel := context.WithCancelCause(context.Background())
+	ctx, cancel := context.WithCancelCause(t.Context())
 	cancel(errFactory)
 
 	value, err := provider.Get(ctx)
@@ -386,7 +394,7 @@ func TestPublicCallerCancellationIsIsolated(t *testing.T) {
 
 	release <- struct{}{}
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 
 	assertEqual(t, "shared value after caller cancellation", got, 42)
 	assertEqual(t, "shared error after caller cancellation", err, nil)
@@ -415,7 +423,7 @@ func TestPublicProviderMisuse(t *testing.T) {
 	var nilContext context.Context
 
 	assertPanic(t, func() { _, _ = provider.Get(nilContext) }, "singleton: nil context")
-	assertPanic(t, func() { _, _ = provider.Get(context.Background()) },
+	assertPanic(t, func() { _, _ = provider.Get(t.Context()) },
 		"singleton: Provider must be created with New or MustNew")
 }
 
@@ -433,7 +441,7 @@ func TestPublicFactoryPanicIsCachedUntilReset(t *testing.T) {
 	})
 
 	for range 2 {
-		assertPanic(t, func() { _, _ = provider.Get(context.Background()) }, errFactory)
+		assertPanic(t, func() { _, _ = provider.Get(t.Context()) }, errFactory)
 	}
 
 	if attempts.Load() != 1 {
@@ -442,7 +450,7 @@ func TestPublicFactoryPanicIsCachedUntilReset(t *testing.T) {
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 
 	assertEqual(t, "value after resetting panic", got, 42)
 	assertEqual(t, "error after resetting panic", err, nil)
@@ -466,9 +474,9 @@ func TestNewRejectsInvalidConstruction(t *testing.T) {
 	var zeroOption singleton.Option
 
 	tests := map[string]struct {
+		want    error
 		factory singleton.Factory[int]
 		options []singleton.Option
-		want    error
 	}{
 		"nil factory": {factory: nil, options: nil, want: singleton.ErrNilFactory},
 		"zero option": {
@@ -531,7 +539,7 @@ func TestNewAppliesEveryOption(t *testing.T) {
 		t.Fatalf("New() error = %v, want nil", err)
 	}
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
@@ -546,7 +554,7 @@ func TestMustNewReturnsAProvider(t *testing.T) {
 
 	provider := singleton.MustNew(okFactory, fastOptions()...)
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
@@ -597,7 +605,7 @@ func TestPermanentStopsRetryingAtTheFirstAttempt(t *testing.T) {
 		return 0, singleton.Permanent(errFatal)
 	}, fastOptions()...)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
 	if initErr.Reason != singleton.FailurePermanent {
@@ -620,7 +628,7 @@ func TestGetReportsAnExhaustedBudget(t *testing.T) {
 		return 0, errBoom
 	}, fastOptions()...)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
 	if initErr.Reason != singleton.FailureExhausted {
@@ -646,14 +654,14 @@ func TestResetStartsANewInitialization(t *testing.T) {
 		return 8, nil
 	}, fastOptions()...)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 	if err == nil {
 		t.Fatal("Get() error = nil, want the exhausted budget")
 	}
 
 	provider.Reset()
 
-	got, err := provider.Get(context.Background())
+	got, err := provider.Get(t.Context())
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -676,7 +684,7 @@ func TestGetReportsTheInitializationTimeout(t *testing.T) {
 		singleton.WithRetryInterval(time.Millisecond, 2*time.Millisecond),
 	)
 
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
 	if initErr.Reason != singleton.FailureTimedOut {
@@ -698,7 +706,7 @@ func TestNewMakesTheRetryObserverPanicSafe(t *testing.T) {
 	}))...)
 
 	// A panicking observer must not become the singleton's result.
-	_, err := provider.Get(context.Background())
+	_, err := provider.Get(t.Context())
 
 	initErr := requireInitError(t, err)
 	if initErr.Reason != singleton.FailureExhausted {

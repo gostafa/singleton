@@ -1,5 +1,4 @@
-// Package domain holds the singleton feature's value types.
-//
-// It depends on nothing outside the standard library: no retry engine, no
-// synchronization primitives, no adapters.
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package domain

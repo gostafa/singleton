@@ -1,52 +1,727 @@
 ---
 version: '2'
 
-run:
-  timeout: 10m
-
 linters:
   default: all
   disable:
     - wsl
     - gomodguard
+    - nonamedreturns
+    - testpackage
+    - godot
+    - exhaustruct
   enable:
-    - gomodguard_v2
+    - reusability
+    - distance
+    - vulner
+    - coverlint
   settings:
-    testpackage:
-      skip-regexp: (^|/)(singleton|domain|application|ports|backoffretry)_test\.go$
+    custom:
+      coverlint:
+        type: module
+        settings:
+          rules:
+            - pattern: '**'
+              min: 1.0
+          test-result-path: ./test-result.txt
+          coverage-result-path: ./coverage.out
+      distance:
+        type: module
+        description: Enforce Go main-sequence distance policy thresholds
+        settings:
+          tests: false
+          generated: false
+          dependency-scope: module
+          rules:
+            - pattern: '**'
+              max: 0.3
+      reusability:
+        type: module
+        description: Enforce Go type reusability policy thresholds
+        settings:
+          dependency-scope: module
+          field-usage: direct
+          rules:
+            - pattern: '**'
+              min: 0.80
+            # - pattern: '**/*_test'
+            #   min: 0.0
+      vulner:
+        type: module
+        description: Report reachable Go vulnerabilities
+    asasalint:
+      exclude: []
+      use-builtin-exclusions: false
+    bidichk:
+      left-to-right-embedding: true
+      right-to-left-embedding: true
+      pop-directional-formatting: true
+      left-to-right-override: true
+      right-to-left-override: true
+      left-to-right-isolate: true
+      right-to-left-isolate: true
+      first-strong-isolate: true
+      pop-directional-isolate: true
+    bodyclose:
+      check-consumption: true
+    copyloopvar:
+      check-alias: true
+    cyclop:
+      max-complexity: 5
+      package-average: 3.0
+    decorder:
+      dec-order:
+        - type
+        - const
+        - var
+        - func
+      ignore-underscore-vars: false
+      disable-dec-order-check: false
+      disable-init-func-first-check: false
+      disable-dec-num-check: false
+      disable-type-dec-num-check: false
+      disable-const-dec-num-check: false
+      disable-var-dec-num-check: false
     depguard:
       rules:
-        main:
+        production:
+          files:
+            - $all
+            - '!$test'
           list-mode: lax
           deny:
-            - pkg: math/rand
-              desc: use math/rand/v2
+            - pkg: io/ioutil$
+              desc: Use io and os packages.
+            - pkg: gopkg.in/yaml.v3
+              desc: Use go.yaml.in/yaml/v3 packages
+        tests:
+          files:
+            - $test
+          list-mode: lax
+          deny:
+            - pkg: io/ioutil$
+              desc: Use io and os packages.
+    dogsled:
+      max-blank-identifiers: 0
+    dupl:
+      threshold: 50
+    dupword:
+      keywords: []
+      ignore: []
+    embeddedstructfieldcheck:
+      forbid-mutex: true
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      disable-default-exclusions: true
+      exclude-functions: []
+      verbose: true
+    errchkjson:
+      check-error-free-encoding: true
+      report-no-exported: true
+    errorlint:
+      errorf: true
+      errorf-multi: false
+      asserts: true
+      comparison: true
+      allowed-errors: []
+      allowed-errors-wildcard: []
+    exhaustive:
+      check:
+        - switch
+        - map
+      default-signifies-exhaustive: false
+      ignore-enum-members: a^
+      ignore-enum-types: a^
+      package-scope-only: false
+      explicit-exhaustive-switch: false
+      explicit-exhaustive-map: false
+      default-case-required: true
+    exhaustruct:
+      include:
+        - .*
+      exclude: []
+    fatcontext:
+      check-struct-pointers: true
+    forbidigo:
+      forbid:
+        - pattern: ^print(ln)?$
+          msg: use structured logging
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: use structured logging
+        - pattern: ^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$
+          msg: use dependency-injected structured logging
+        - pattern: ^panic$
+          msg: return an error instead of panicking
+      exclude-godoc-examples: false
+      analyze-types: true
+    funcorder:
+      constructor: true
+      struct-method: true
+      alphabetical: true
+    funlen:
+      lines: 20
+      statements: 10
+      ignore-comments: false
+    ginkgolinter:
+      suppress-len-assertion: false
+      suppress-nil-assertion: false
+      suppress-err-assertion: false
+      suppress-compare-assertion: false
+      suppress-async-assertion: false
+      suppress-type-compare-assertion: false
+      forbid-focus-container: true
+      allow-havelen-zero: false
+      force-expect-to: true
+      validate-async-intervals: true
+      forbid-spec-pollution: true
+      force-succeed: true
+    gochecksumtype:
+      default-signifies-exhaustive: false
+      include-shared-interfaces: true
+    gocognit:
+      min-complexity: 10
+    goconst:
+      min-len: 1
+      min-occurrences: 2
+      match-constant: true
+      numbers: true
+      min: 2
+      max: 1000000
+      ignore-calls: false
+      ignore-string-values: []
+      find-duplicates: true
+      eval-const-expressions: true
+      ignore-tests: false
+      ignore-functions: []
+    gocritic:
+      disable-all: false
+      enable-all: true
+      settings:
+        captLocal:
+          paramsOnly: false
+        elseif:
+          skipBalanced: false
+        hugeParam:
+          sizeThreshold: 32
+        ifElseChain:
+          minThreshold: 2
+        rangeExprCopy:
+          sizeThreshold: 1
+          skipTestFuncs: false
+        rangeValCopy:
+          sizeThreshold: 1
+          skipTestFuncs: false
+        underef:
+          skipRecvDeref: false
+    gocyclo:
+      min-complexity: 5
+    godot:
+      scope: all
+      exclude:
+        - '^SPDX-License-Identifier:'
+        - ^Taskotter
+      period: true
+      capital: true
+    godox:
+      keywords:
+        - TODO
+        - BUG
+        - FIXME
+        - HACK
+        - XXX
+        - OPTIMIZE
+        - NOTE
+    goheader:
+      values:
+        const:
+          COMPANY: Gostafa
+          SPDX: Apache-2.0
+        regexp: {}
+      template: "{{ COMPANY }} {{ YEAR }}.\nSPDX-License-Identifier: {{ SPDX }}."
+    gomoddirectives:
+      replace-local: false
+      replace-allow-list: []
+      retract-allow-no-explanation: false
+      exclude-forbidden: true
+      ignore-forbidden: true
+      toolchain-forbidden: true
+      toolchain-pattern: a^
+      tool-forbidden: true
+      go-debug-forbidden: true
+      go-version-pattern: ^1\.26\.6$
+    gosec:
+      includes: []
+      excludes: []
+      severity: low
+      confidence: low
+      concurrency: 1
+      config:
+        global:
+          nosec: true
+          show-ignored: true
+          audit: true
+        G101:
+          pattern: (?i)passwd|pass|password|pwd|secret|token|api[_-]?key|bearer|credential|private[_-]?key
+          ignore_entropy: false
+          entropy_threshold: '20.0'
+          per_char_threshold: '2.0'
+          truncate: '64'
+        G301: '0750'
+        G302: '0600'
+        G306: '0600'
+    gosmopolitan:
+      allow-time-local: false
+      escape-hatches: []
+      watch-for-scripts:
+        - Arabic
+        - Cyrillic
+        - Devanagari
+        - Greek
+        - Han
+        - Hangul
+        - Hebrew
+        - Hiragana
+        - Katakana
+    govet:
+      disable-all: false
+      enable-all: true
+      settings:
+        shadow:
+          strict: true
+    grouper:
+      const-require-single-const: true
+      const-require-grouping: true
+      import-require-single-import: true
+      import-require-grouping: true
+      type-require-single-type: true
+      type-require-grouping: true
+      var-require-single-var: true
+      var-require-grouping: false
+    iface:
+      enable:
+        - identical
+        - opaque
+        - unexported
+    importas:
+      no-unaliased: true
+      no-extra-aliases: false
+      alias:
+        - pkg: go.yaml.in/yaml/v3
+          alias: yaml
+    inamedparam:
+      skip-single-param: false
+    interfacebloat:
+      max: 5
     ireturn:
       allow:
         - error
-        - empty
-        - anon
-        - stdlib
-        - generic
-    cyclop:
-      max-complexity: 5
-      package-average: 5.0
-    wsl_v5:
-      allow-first-in-block: true
-      allow-whole-block: false
-      branch-max-lines: 2
-    varnamelen:
-      # Conventional short names that are clearer than a verbose alternative.
-      ignore-names:
-        - tx
-        - db
-        - id
-        - ok
+    lll:
+      line-length: 120
+      tab-width: 2
+    loggercheck:
+      kitlog: true
+      klog: true
+      logr: true
+      slog: true
+      zap: true
+      require-string-key: true
+      no-printf-like: true
+      rules: []
+    maintidx:
+      under: 50
+    makezero:
+      always: true
+    misspell:
+      locale: US
+      ignore-rules: []
+      extra-words: []
+      mode: default
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+        - assign
+      ignored-numbers: []
+      ignored-files: []
+      ignored-functions: []
+    modernize:
+      disable: []
+    musttag:
+      functions: []
+    nakedret:
+      max-func-lines: 0
+    nestif:
+      min-complexity: 1
+    nilnil:
+      only-two: false
+      detect-opposite: true
+      checked-types:
+        - chan
+        - func
+        - iface
+        - map
+        - ptr
+        - uintptr
+        - unsafeptr
+    nlreturn:
+      block-size: 0
+    nolintlint:
+      allow-unused: false
+      allow-no-explanation: []
+      require-explanation: true
+      require-specific: true
+    nonamedreturns:
+      report-error-in-defer: true
+    paralleltest:
+      ignore-missing: false
+      ignore-missing-subtests: false
+    perfsprint:
+      integer-format: true
+      int-conversion: true
+      error-format: true
+      err-error: true
+      errorf: true
+      string-format: true
+      sprintf1: true
+      strconcat: true
+      bool-format: true
+      hex-format: true
+    prealloc:
+      simple: false
+      range-loops: true
+      for-loops: true
+    predeclared:
+      ignore: []
+      qualified-name: true
+    promlinter:
+      strict: true
+      disabled-linters: []
+    protogetter:
+      skip-generated-by: []
+      skip-files: []
+      skip-any-generated: false
+      replace-first-arg-in-append: true
+    reassign:
+      patterns:
+        - .*
+    recvcheck:
+      disable-builtin: true
+      exclusions: []
+    revive:
+      max-open-files: 2048
+      severity: error
+      enable-all-rules: true
+      directives:
+        - name: specify-disable-reason
+          severity: error
+      confidence: 0.0
+      rules:
+        - name: argument-limit
+          severity: error
+          disabled: false
+          arguments:
+            - 3
+        - name: cognitive-complexity
+          severity: error
+          disabled: false
+          arguments:
+            - 5
+        - name: cyclomatic
+          severity: error
+          disabled: false
+          arguments:
+            - 5
+        - name: function-length
+          severity: error
+          disabled: false
+          arguments:
+            - 10
+            - 0
+        - name: line-length-limit
+          severity: error
+          disabled: false
+          arguments:
+            - 120
+    rowserrcheck:
+      packages: []
+    sloglint:
+      no-global: all
+      context: all
+      static-msg: true
+      msg-style: lowercased
+      no-mixed-args: true
+      kv-only: false
+      attr-only: true
+      args-on-sep-lines: true
+      no-raw-keys: true
+      forbidden-keys:
+        - time
+        - level
+        - msg
+        - source
+      key-naming-case: snake
+    spancheck:
+      checks:
+        - end
+        - record-error
+        - set-status
+      ignore-check-signatures: []
+      extra-start-span-signatures: []
+    staticcheck:
+      dot-import-whitelist: []
+      initialisms:
+        - ACL
+        - API
+        - ASCII
+        - CPU
+        - CSS
+        - DNS
+        - EOF
+        - GUID
+        - HTML
+        - HTTP
+        - HTTPS
+        - ID
+        - IP
+        - JSON
+        - QPS
+        - RAM
+        - RPC
+        - SLA
+        - SMTP
+        - SQL
+        - SSH
+        - TCP
+        - TLS
+        - TTL
+        - UDP
+        - UI
+        - GID
+        - UID
+        - UUID
+        - URI
+        - URL
+        - UTF8
+        - VM
+        - XML
+        - XMPP
+        - XSRF
+        - XSS
+        - SIP
+        - RTP
+        - AMQP
+        - DB
+        - TS
+      http-status-code-whitelist: []
+      checks:
+        - all
     tagalign:
+      align: true
+      sort: true
       order:
         - json
-        - exhaustruct
+        - yaml
+        - xml
+        - toml
+        - bson
+        - mapstructure
+        - env
+        - validate
+      strict: true
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+          xml: snake
+          toml: snake
+          bson: snake
+          avro: snake
+          mapstructure: snake
+          env: upperSnake
+          envconfig: upperSnake
+        extended-rules: {}
+        use-field-name: false
+        ignored-fields: []
+        overrides: []
+    testifylint:
+      enable-all: true
+      disable: []
+      disable-all: false
+      enable: []
+      bool-compare:
+        ignore-custom-types: false
+      expected-actual:
+        pattern: (^(exp(ected)?|want(ed)?)([A-Z]\w*)?$)|(^(\w*[a-z])?(Exp(ected)?|Want(ed)?)$)
+      formatter:
+        check-format-string: true
+        require-f-funcs: true
+        require-string-msg: true
+      go-require:
+        ignore-http-handlers: false
+      require-error:
+        fn-pattern: ''
+      suite-extra-assert-call:
+        mode: require
+    thelper:
+      test:
+        first: true
+        name: true
+        begin: true
+      benchmark:
+        first: true
+        name: true
+        begin: true
+      tb:
+        first: true
+        name: true
+        begin: true
+      fuzz:
+        first: true
+        name: true
+        begin: true
+    unconvert:
+      fast-math: true
+      safe: false
+    unparam:
+      check-exported: true
+    unused:
+      field-writes-are-uses: false
+      post-statements-are-reads: false
+      exported-fields-are-used: true
+      parameters-are-used: true
+      local-variables-are-used: false
+      generated-is-used: true
+    usestdlibvars:
+      http-method: true
+      http-status-code: true
+      time-date-month: true
+      time-weekday: true
+      time-month: true
+      time-layout: true
+      crypto-hash: true
+      default-rpc-path: true
+      sql-isolation-level: true
+      tls-signature-scheme: true
+      constant-kind: true
+    usetesting:
+      os-create-temp: true
+      os-mkdir-temp: true
+      os-setenv: true
+      os-temp-dir: true
+      os-chdir: true
+      context-background: true
+      context-todo: true
+    varnamelen:
+      max-distance: 0
+      min-name-length: 3
+      check-receiver: true
+      check-return: true
+      check-type-param: true
+      ignore-type-assert-ok: false
+      ignore-map-index-ok: false
+      ignore-chan-recv-ok: false
+      ignore-names:
+        - id
+        - ok
+        - idx
+        - db
+        - err
+        - dir
+        - t
+        - i
+      ignore-decls: []
+    whitespace:
+      multi-if: true
+      multi-func: false
+    wrapcheck:
+      extra-ignore-sigs: []
+      ignore-sigs: []
+      ignore-sig-regexps: []
+      ignore-package-globs: []
+      ignore-interface-regexps: []
+      report-internal-errors: true
+    wsl_v5:
+      allow-first-in-block: false
+      allow-whole-block: false
+      branch-max-lines: 0
+      case-max-lines: 0
+      default: all
+      enable:
+        - append
+        - assign
+        - branch
+        - decl
+        - defer
+        - err
+        - expr
+        - for
+        - go
+        - if
+        - inc-dec
+        - label
+        - range
+        - return
+        - select
+        - send
+        - switch
+        - type-switch
+        - leading-whitespace
+        - trailing-whitespace
+        - assign-exclusive
+        - assign-expr
+      disable: []
+  exclusions:
+    generated: disable
+    warn-unused: true
 
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+  uniq-by-line: false
+  new: false
+  fix: false
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+  path-prefix: ''
+  path-mode: ''
+  sort-order:
+    - severity
+    - linter
+    - file
+  show-stats: true
+
+run:
+  timeout: '0'
+  relative-path-mode: gomod
+  issues-exit-code: 1
+  tests: true
+  build-tags: []
+  modules-download-mode: readonly
+  allow-parallel-runners: false
+  allow-serial-runners: false
+  go: '1.26'
+  concurrency: 0
+
+severity:
+  default: error
+  rules: []
+
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+    - swaggo

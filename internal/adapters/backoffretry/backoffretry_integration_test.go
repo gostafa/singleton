@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package backoffretry_test
 
 import (
@@ -36,6 +39,7 @@ func requireInitError(t *testing.T, err error) *domain.InitError {
 	t.Helper()
 
 	var initErr *domain.InitError
+
 	if !errors.As(err, &initErr) {
 		t.Fatalf("errors.As(%v, *domain.InitError) = false, want true", err)
 	}
@@ -79,7 +83,7 @@ func TestDoReturnsTheFirstSuccess(t *testing.T) {
 	calls := 0
 
 	got, err := backoffretry.New[int](fastConfig(3, time.Second, nil)).
-		Do(context.Background(), func(context.Context) (int, error) {
+		Do(t.Context(), func(context.Context) (int, error) {
 			calls++
 
 			return 42, nil
@@ -110,7 +114,7 @@ func TestDoRetriesUntilSuccessAndNotifiesTheObserver(t *testing.T) {
 	calls := 0
 
 	got, err := backoffretry.New[string](cfg).
-		Do(context.Background(), func(context.Context) (string, error) {
+		Do(t.Context(), func(context.Context) (string, error) {
 			calls++
 			if calls < 3 {
 				return "", errBoom
@@ -141,7 +145,7 @@ func TestDoReportsAnExhaustedAttemptBudget(t *testing.T) {
 
 	// A nil observer still runs the notify callback, which must return early.
 	got, err := backoffretry.New[int](fastConfig(3, time.Second, nil)).
-		Do(context.Background(), func(context.Context) (int, error) {
+		Do(t.Context(), func(context.Context) (int, error) {
 			calls++
 
 			return 7, errBoom
@@ -171,7 +175,7 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 	calls := 0
 
 	_, err := backoffretry.New[int](fastConfig(5, time.Second, nil)).
-		Do(context.Background(), func(context.Context) (int, error) {
+		Do(t.Context(), func(context.Context) (int, error) {
 			calls++
 
 			return 3, fmt.Errorf("dial: %w", domain.Permanent(errFatal))
@@ -195,7 +199,7 @@ func TestDoReportsItsOwnTimeout(t *testing.T) {
 	t.Parallel()
 
 	_, err := backoffretry.New[int](fastConfig(5, 20*time.Millisecond, nil)).
-		Do(context.Background(), func(ctx context.Context) (int, error) {
+		Do(t.Context(), func(ctx context.Context) (int, error) {
 			<-ctx.Done()
 
 			return 0, errBoom
@@ -210,7 +214,7 @@ func TestDoReportsItsOwnTimeout(t *testing.T) {
 func TestDoReportsACancelledParentContext(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	// A zero timeout means the parent context is the only stop condition.

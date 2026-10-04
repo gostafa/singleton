@@ -1,3 +1,6 @@
+// Gostafa 2026.
+// SPDX-License-Identifier: Apache-2.0.
+
 package backoffretry
 
 import (
@@ -15,6 +18,7 @@ func requireInitError(t *testing.T, err error) *domain.InitError {
 	t.Helper()
 
 	var initErr *domain.InitError
+
 	if !errors.As(err, &initErr) {
 		t.Fatalf("errors.As(%v, *domain.InitError) = false, want true", err)
 	}
