@@ -73,10 +73,9 @@ runs:
         (steps.codecov-coverage.outcome == 'failure' || steps.codecov-tests.outcome == 'failure') }}
       shell: bash
       # Probe without credentials; the CLI retry handler hides connection errors.
-      run: |
+      run: |-
         python - <<'PY'
         import requests
-
         for url in (
             "https://codecov.io/upload/v4",
             "https://ingest.codecov.io/upload/test_results/v1",
