@@ -34,12 +34,15 @@ runs:
       # The system Python can retain old requests, urllib3, and CA certificates.
       run: python -m pip install --upgrade requests urllib3 certifi
     - name: Upload coverage to Codecov
+      id: codecov-coverage
       if: ${{ !cancelled() }}
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
       with:
         use_oidc: true
         # Avoid cli.codecov.io TLS failures by installing the CLI from PyPI.
         use_pypi: true
+        # Bypass the failing ingest endpoint using Codecov's coverage-only fallback.
+        use_legacy_upload_endpoint: true
         files: ./coverage.out
         report_type: coverage
         name: coverage-${{ runner.os }}
@@ -49,6 +52,7 @@ runs:
         fail_ci_if_error: true
         verbose: true
     - name: Upload test results to Codecov
+      id: codecov-tests
       if: ${{ !cancelled() }}
       uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f  # v7.0.0
       with:
@@ -63,3 +67,23 @@ runs:
         env_vars: RUNNER_OS
         fail_ci_if_error: true
         verbose: true
+    - name: Diagnose Codecov connectivity after an upload failure
+      if: >-
+        ${{ !cancelled() &&
+        (steps.codecov-coverage.outcome == 'failure' || steps.codecov-tests.outcome == 'failure') }}
+      shell: bash
+      # Probe without credentials; the CLI retry handler hides connection errors.
+      run: |
+        python - <<'PY'
+        import requests
+
+        for url in (
+            "https://codecov.io/upload/v4",
+            "https://ingest.codecov.io/upload/test_results/v1",
+        ):
+            try:
+                response = requests.get(url, timeout=15)
+                print(f"{url}: HTTP {response.status_code}")
+            except requests.exceptions.RequestException as error:
+                print(f"{url}: {type(error).__name__}: {error}")
+        PY
