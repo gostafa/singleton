@@ -9,10 +9,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
-	"github.com/mostafakhairy0305-dot/singleton/internal/application"
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/adapters/backoffretry"
+	"github.com/gostafa/singleton/internal/application"
+	"github.com/gostafa/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/ports"
 )
 
 // String returns a short human-readable description of reason.

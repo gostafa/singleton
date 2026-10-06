@@ -6,7 +6,7 @@ package backoffretry
 import (
 	"fmt"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/domain"
 )
 
 // NewInitError builds an InitError.

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mostafakhairy0305-dot/singleton"
+	"github.com/gostafa/singleton"
 )
 
 var errBench = errors.New("bench failure")

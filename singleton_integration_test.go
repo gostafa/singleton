@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mostafakhairy0305-dot/singleton"
+	"github.com/gostafa/singleton"
 )
 
 var errFactory = errors.New("factory failed")
@@ -80,7 +80,7 @@ func TestPublicTypesBelongToSingleton(t *testing.T) {
 	}
 
 	for _, typ := range types {
-		if typ.PkgPath() != "github.com/mostafakhairy0305-dot/singleton" {
+		if typ.PkgPath() != "github.com/gostafa/singleton" {
 			t.Errorf("%s belongs to %s, want the public package", typ, typ.PkgPath())
 		}
 	}

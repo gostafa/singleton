@@ -9,9 +9,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
-	"github.com/mostafakhairy0305-dot/singleton/internal/application"
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/adapters/backoffretry"
+	"github.com/gostafa/singleton/internal/application"
+	"github.com/gostafa/singleton/internal/ports"
 )
 
 type (

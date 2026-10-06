@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/application"
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/application"
+	"github.com/gostafa/singleton/internal/ports"
 )
 
 var (

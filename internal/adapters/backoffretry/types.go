@@ -6,7 +6,7 @@ package backoffretry
 import (
 	"time"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/domain"
 )
 
 type (

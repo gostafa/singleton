@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/ports"
 )
 
 // lockHandoff is how long a test waits for a goroutine to park on the

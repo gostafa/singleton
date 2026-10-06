@@ -6,7 +6,7 @@ package singleton_test
 import (
 	"testing"
 
-	"github.com/mostafakhairy0305-dot/singleton"
+	"github.com/gostafa/singleton"
 )
 
 const unknownReason = "initialization failed"

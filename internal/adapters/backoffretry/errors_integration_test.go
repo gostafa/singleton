@@ -8,8 +8,8 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/adapters/backoffretry"
-	"github.com/mostafakhairy0305-dot/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/adapters/backoffretry"
+	"github.com/gostafa/singleton/internal/domain"
 )
 
 var (

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/ports"
 )
 
 type (

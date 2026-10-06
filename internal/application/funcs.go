@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mostafakhairy0305-dot/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/ports"
 )
 
 // NewProvider wires a factory to the retry policy that will drive it.

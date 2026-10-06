@@ -1,4 +1,4 @@
-module github.com/mostafakhairy0305-dot/singleton
+module github.com/gostafa/singleton
 
 go 1.26.6
 
