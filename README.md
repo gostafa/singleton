@@ -1,7 +1,8 @@
 # singleton
 
 
-[![LICENSE](https://img.shields.io/github/license/gostafa/singleton)](/LICENSE) [![codecov](https://codecov.io/gh/gostafa/singleton/graph/badge.svg)](https://codecov.io/gh/gostafa/singleton) [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/gostafa/singleton?utm_source=badge)
+[![LICENSE](https://img.shields.io/github/license/gostafa/singleton)](/LICENSE) [![codecov](https://codecov.io/gh/gostafa/singleton/graph/badge.svg)](https://codecov.io/gh/gostafa/singleton) [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/gostafa/singleton?utm_source=badge) [![Go Reference](https://pkg.go.dev/badge/github.com/gostafa/singleton)](https://pkg.go.dev/github.com/gostafa/singleton)
+
 
 
 Lazy, retryable, process-local singletons for Go.
