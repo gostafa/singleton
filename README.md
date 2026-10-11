@@ -2,6 +2,7 @@
 
 
 [![LICENSE](https://img.shields.io/github/license/gostafa/singleton)](/LICENSE) [![codecov](https://codecov.io/gh/gostafa/singleton/graph/badge.svg)](https://codecov.io/gh/gostafa/singleton) [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/gostafa/singleton?utm_source=badge) [![Go Reference](https://pkg.go.dev/badge/github.com/gostafa/singleton)](https://pkg.go.dev/github.com/gostafa/singleton)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton?ref=badge_shield)
 
 
 Lazy, retryable, process-local singletons for Go.
@@ -538,3 +539,7 @@ The domain defines `InitError` and `PermanentError` as interfaces. The backoff a
 The `Retrier` port is what keeps `cenkalti/backoff` out of the API entirely, and it carries three obligations any adapter must honour: run the operation at least once; return the **zero** `T` on failure, never a half-built value; and set `Reason()` from the policy's own stop condition rather than inferring it from the operation's error.
 
 `go list -deps` on `internal/application`, `internal/domain` and `internal/ports` resolves **zero** backoff imports — the core does not know a retry engine exists.
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton?ref=badge_large)
