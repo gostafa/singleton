@@ -5,6 +5,10 @@ on:
   push: null
   workflow_dispatch: null
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pipeline:
     name: CI
