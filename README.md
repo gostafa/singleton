@@ -2,7 +2,7 @@
 
 
 [![LICENSE](https://img.shields.io/github/license/gostafa/singleton)](/LICENSE) [![codecov](https://codecov.io/gh/gostafa/singleton/graph/badge.svg)](https://codecov.io/gh/gostafa/singleton) [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/gostafa/singleton?utm_source=badge) [![Go Reference](https://pkg.go.dev/badge/github.com/gostafa/singleton)](https://pkg.go.dev/github.com/gostafa/singleton)
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton?ref=badge_shield)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton?ref=badge_shield) [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton.svg?type=shield&issueType=security)](https://app.fossa.com/projects/git%2Bgithub.com%2Fgostafa%2Fsingleton?ref=badge_shield&issueType=security)
 
 
 Lazy, retryable, process-local singletons for Go.
