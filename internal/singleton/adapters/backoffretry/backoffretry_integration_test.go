@@ -12,6 +12,7 @@ import (
 
 	"github.com/gostafa/singleton/internal/singleton/adapters/backoffretry"
 	"github.com/gostafa/singleton/internal/singleton/domain"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 var (
@@ -82,12 +83,12 @@ func TestDoReturnsTheFirstSuccess(t *testing.T) {
 
 	calls := 0
 
-	got, err := backoffretry.New[int](fastConfig(3, time.Second, nil)).
-		Do(t.Context(), func(context.Context) (int, error) {
+	got, err := testUnpack(backoffretry.New[int](fastConfig(3, time.Second, nil)).
+		Do(t.Context(), testOperation(func(context.Context) (int, error) {
 			calls++
 
 			return 42, nil
-		})
+		})))
 	if err != nil {
 		t.Fatalf("Do() error = %v, want nil", err)
 	}
@@ -113,15 +114,15 @@ func TestDoRetriesUntilSuccessAndNotifiesTheObserver(t *testing.T) {
 
 	calls := 0
 
-	got, err := backoffretry.New[string](cfg).
-		Do(t.Context(), func(context.Context) (string, error) {
+	got, err := testUnpack(backoffretry.New[string](cfg).
+		Do(t.Context(), testOperation(func(context.Context) (string, error) {
 			calls++
 			if calls < 3 {
 				return "", errBoom
 			}
 
 			return "ready", nil
-		})
+		})))
 	if err != nil {
 		t.Fatalf("Do() error = %v, want nil", err)
 	}
@@ -144,12 +145,12 @@ func TestDoReportsAnExhaustedAttemptBudget(t *testing.T) {
 	calls := 0
 
 	// A nil observer still runs the notify callback, which must return early.
-	got, err := backoffretry.New[int](fastConfig(3, time.Second, nil)).
-		Do(t.Context(), func(context.Context) (int, error) {
+	got, err := testUnpack(backoffretry.New[int](fastConfig(3, time.Second, nil)).
+		Do(t.Context(), testOperation(func(context.Context) (int, error) {
 			calls++
 
 			return 7, errBoom
-		})
+		})))
 
 	if got != 0 {
 		t.Errorf("Do() = %d, want the zero value on failure", got)
@@ -174,12 +175,12 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 
 	calls := 0
 
-	_, err := backoffretry.New[int](fastConfig(5, time.Second, nil)).
-		Do(t.Context(), func(context.Context) (int, error) {
+	_, err := testUnpack(backoffretry.New[int](fastConfig(5, time.Second, nil)).
+		Do(t.Context(), testOperation(func(context.Context) (int, error) {
 			calls++
 
 			return 3, fmt.Errorf("dial: %w", backoffretry.Permanent(errFatal))
-		})
+		})))
 
 	if calls != 1 {
 		t.Errorf("the operation ran %d times, want 1", calls)
@@ -198,12 +199,12 @@ func TestDoStopsAtAPermanentError(t *testing.T) {
 func TestDoReportsItsOwnTimeout(t *testing.T) {
 	t.Parallel()
 
-	_, err := backoffretry.New[int](fastConfig(5, 20*time.Millisecond, nil)).
-		Do(t.Context(), func(ctx context.Context) (int, error) {
+	_, err := testUnpack(backoffretry.New[int](fastConfig(5, 20*time.Millisecond, nil)).
+		Do(t.Context(), testOperation(func(ctx context.Context) (int, error) {
 			<-ctx.Done()
 
 			return 0, errBoom
-		})
+		})))
 
 	initErr := requireInitError(t, err)
 	if initErr.Reason() != domain.FailureTimedOut {
@@ -218,13 +219,13 @@ func TestDoReportsACancelledParentContext(t *testing.T) {
 	defer cancel()
 
 	// A zero timeout means the parent context is the only stop condition.
-	_, err := backoffretry.New[int](fastConfig(5, 0, nil)).
-		Do(ctx, func(ctx context.Context) (int, error) {
+	_, err := testUnpack(backoffretry.New[int](fastConfig(5, 0, nil)).
+		Do(ctx, testOperation(func(ctx context.Context) (int, error) {
 			cancel()
 			<-ctx.Done()
 
 			return 0, errBoom
-		})
+		})))
 
 	initErr := requireInitError(t, err)
 	if initErr.Reason() != domain.FailureCanceled {
@@ -265,4 +266,16 @@ func TestPermanentWrapsTheError(t *testing.T) {
 	if !errors.Is(got, errFactory) {
 		t.Errorf("errors.Is(got, errFactory) = false, want true")
 	}
+}
+
+// testOperation adapts a factory to the internal result contract.
+func testOperation[T any](factory func(context.Context) (T, error)) ports.Operation[T] {
+	return func(ctx context.Context) ports.Result[T] {
+		value, err := factory(ctx)
+		return ports.Result[T]{Value: value, Err: err}
+	}
+}
+
+func testUnpack[T any](outcome ports.Result[T]) (T, error) {
+	return outcome.Value, outcome.Err
 }

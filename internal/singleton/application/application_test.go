@@ -19,7 +19,7 @@ const lockHandoff = 50 * time.Millisecond
 // entirely through its factory.
 type onceRetrier[T any] struct{}
 
-func (onceRetrier[T]) Do(ctx context.Context, op ports.Operation[T]) (T, error) {
+func (onceRetrier[T]) Do(ctx context.Context, op ports.Operation[T]) ports.Result[T] {
 	return op(ctx)
 }
 
@@ -29,14 +29,14 @@ func TestAbandonReturnsTheResultWhenInitializationWinsTheRace(t *testing.T) {
 	current := new(state[int])
 
 	current.done = make(chan struct{})
-	current.value = 99
+	current.outcome.Value = 99
 	current.settled.Store(true)
 	close(current.done)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	got, err := abandon(ctx, current)
+	got, err := testUnpack(abandon(ctx, current))
 	if err != nil {
 		t.Fatalf("abandon() error = %v, want nil", err)
 	}
@@ -51,17 +51,17 @@ func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
 
 	provider := new(lifecycle[int])
 
-	provider.factory = func(context.Context) (int, error) {
+	provider.factory = testOperation(func(context.Context) (int, error) {
 		t.Error("the factory ran, want load to adopt the stored state")
 
 		return 0, nil
-	}
+	})
 	provider.retrier = onceRetrier[int]{}
 
 	existing := new(state[int])
 
 	existing.done = make(chan struct{})
-	existing.value = 11
+	existing.outcome.Value = 11
 	existing.settled.Store(true)
 	close(existing.done)
 
@@ -96,7 +96,7 @@ func TestGetRejectsMissingFactory(t *testing.T) {
 			t.Errorf("panic = %v, want %q", got, uninitializedProvider)
 		}
 	}()
-	_, _ = provider.Get(t.Context())
+	_, _ = testUnpack(provider.Get(t.Context()))
 }
 
 func TestGetPanicsOnTheZeroProvider(t *testing.T) {
@@ -110,5 +110,17 @@ func TestGetPanicsOnTheZeroProvider(t *testing.T) {
 		}
 	}()
 
-	_, _ = instance.Get(t.Context())
+	_, _ = testUnpack(instance.Get(t.Context()))
+}
+
+// testOperation adapts a factory to the internal result contract.
+func testOperation[T any](factory func(context.Context) (T, error)) ports.Operation[T] {
+	return func(ctx context.Context) ports.Result[T] {
+		value, err := factory(ctx)
+		return ports.Result[T]{Value: value, Err: err}
+	}
+}
+
+func testUnpack[T any](outcome ports.Result[T]) (T, error) {
+	return outcome.Value, outcome.Err
 }

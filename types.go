@@ -68,8 +68,10 @@ type (
 	// Its implementation is unexported so callers cannot depend on the retry
 	// library underneath. The zero value is invalid and is rejected by [New].
 	Option struct {
-		apply func(*config) error
+		apply func(*config) validationCode
 	}
+
+	validationCode = string
 
 	config = struct {
 		retry backoffretry.Config

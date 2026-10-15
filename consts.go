@@ -27,4 +27,11 @@ const (
 	defaultTimeout         = 30 * time.Second
 	defaultInitialInterval = 250 * time.Millisecond
 	defaultMaxInterval     = 5 * time.Second
+
+	validOptions            validationCode = ""
+	invalidOption           validationCode = "invalid option"
+	zeroMaxAttempts         validationCode = "zero max attempts"
+	negativeTimeout         validationCode = "negative timeout"
+	zeroInitialInterval     validationCode = "zero initial interval"
+	maxIntervalBelowInitial validationCode = "maximum interval below initial"
 )

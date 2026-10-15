@@ -28,8 +28,7 @@ func New[Value any](cfg Config) ports.Retrier[Value] {
 func (retrier *retrier[Value]) Do(
 	ctx context.Context,
 	operation ports.Operation[Value],
-) (Value, error) {
-	//nolint:wrapcheck // Preserve the classified initialization error.
+) ports.Result[Value] {
 	return do(ctx, operation, &retrier.cfg)
 }
 
@@ -37,7 +36,7 @@ func do[Value any](
 	ctx context.Context,
 	operation ports.Operation[Value],
 	cfg *Config,
-) (Value, error) {
+) ports.Result[Value] {
 	ctx, cancel := retryContext(ctx, cfg)
 	defer cancel()
 
@@ -45,33 +44,31 @@ func do[Value any](
 	if err != nil {
 		var zero Value
 
-		//nolint:wrapcheck // Return the classified domain error directly.
-		return zero, translate(err)
+		return ports.Result[Value]{Value: zero, Err: translate(err)}
 	}
 
-	return value, nil
+	return ports.Result[Value]{Value: value, Err: nil}
 }
 
 // runOnce performs a single attempt, translating an error marked with
 // [Permanent] into the retry engine's own stop signal.
 func runOnce[Value any](ctx context.Context, operation ports.Operation[Value]) (Value, error) {
-	value, err := operation(ctx)
-	if err == nil {
-		return value, nil
+	outcome := operation(ctx)
+	if outcome.Err == nil {
+		return outcome.Value, nil
 	}
 
-	if permanent, ok := errors.AsType[domain.PermanentError](err); ok {
+	if permanent, ok := errors.AsType[domain.PermanentError](outcome.Err); ok {
 		// Retry finds the marker with errors.As and replaces this error with a
 		// RetryError carrying permanent.Err, so this message never reaches a
 		// caller.
-		return value, fmt.Errorf(
+		return outcome.Value, fmt.Errorf(
 			"backoffretry: stop retrying: %w",
 			backoff.Permanent(permanent.PermanentCause()),
 		)
 	}
 
-	//nolint:wrapcheck // Keep the original factory error in retry events and results.
-	return value, err
+	return outcome.Value, outcome.Err
 }
 
 // notify builds the callback the retry engine invokes between attempts. It
@@ -140,22 +137,32 @@ func retry[Value any](
 ) (Value, error) {
 	var attempt uint
 
-	//nolint:wrapcheck // Translate the retry engine error at the Do boundary.
-	return backoff.Retry(
+	value, err := backoff.Retry(
 		ctx,
 		func() (Value, error) {
 			attempt++
 
 			return runOnce(ctx, operation)
 		},
-		withBackOff(policy(cfg)),
-		backoff.WithMaxTries(cfg.MaxAttempts),
-		backoff.WithMaxElapsedTime(noDuration),
-		backoff.WithNotify(notify(cfg, &attempt)),
+		retryOptions(cfg, &attempt)...,
 	)
+	if err != nil {
+		return value, fmt.Errorf("backoffretry: retry operation: %w", err)
+	}
+
+	return value, nil
 }
 
 func withBackOff(policy backOff) backoff.RetryOption { return backoff.WithBackOff(policy) }
+
+func retryOptions(cfg *Config, attempt *uint) []backoff.RetryOption {
+	return []backoff.RetryOption{
+		withBackOff(policy(cfg)),
+		backoff.WithMaxTries(cfg.MaxAttempts),
+		backoff.WithMaxElapsedTime(noDuration),
+		backoff.WithNotify(notify(cfg, attempt)),
+	}
+}
 
 // newInitError builds a classified initialization failure.
 //

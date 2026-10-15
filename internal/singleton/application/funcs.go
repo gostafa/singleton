@@ -37,35 +37,31 @@ func NewProvider[Value any](
 // caller's context ends before initialization settles, and re-panics with the
 // factory's panic value if the factory panicked. It panics if ctx is nil or if
 // the provider is the zero value.
-func (provider *provider[Value]) Get(ctx context.Context) (Value, error) {
-	//nolint:wrapcheck // Preserve the cached initialization error.
+func (provider *provider[Value]) Get(ctx context.Context) ports.Result[Value] {
 	return get(ctx, provider.lifecycle)
 }
 
-func get[Value any](ctx context.Context, provider *lifecycle[Value]) (Value, error) {
+func get[Value any](ctx context.Context, provider *lifecycle[Value]) ports.Result[Value] {
 	if ctx == nil {
 		//nolint:forbidigo // Preserve the documented panic contract.
 		panic("singleton: nil context")
 	}
 
 	current := load(provider)
-	//nolint:wrapcheck // Preserve the cached initialization error.
+
 	return wait(ctx, current)
 }
 
-func wait[Value any](ctx context.Context, currentState *state[Value]) (Value, error) {
+func wait[Value any](ctx context.Context, currentState *state[Value]) ports.Result[Value] {
 	if currentState.settled.Load() {
-		//nolint:wrapcheck // Every caller receives the same cached error.
 		return result(currentState)
 	}
 
 	select {
 	case <-currentState.done:
-		//nolint:wrapcheck // Every caller receives the same cached error.
 		return result(currentState)
 
 	case <-ctx.Done():
-		//nolint:wrapcheck // The caller cancellation error already carries its context.
 		return abandon(ctx, currentState)
 	}
 }
@@ -131,13 +127,13 @@ func start[Value any](provider *lifecycle[Value]) *state[Value] {
 	return current
 }
 
-func result[Value any](currentState *state[Value]) (Value, error) {
+func result[Value any](currentState *state[Value]) ports.Result[Value] {
 	if currentState.panicked {
 		//nolint:forbidigo // Preserve the documented panic contract.
 		panic(currentState.panicValue)
 	}
 
-	return currentState.value, currentState.err
+	return currentState.outcome
 }
 
 // abandon reports why this caller stopped waiting, unless initialization
@@ -146,31 +142,29 @@ func result[Value any](currentState *state[Value]) (Value, error) {
 // The error wraps context.Cause(ctx), so a context.WithCancelCause reason
 // stays reachable through errors.Is and errors.As. It describes the caller's
 // own context rather than the singleton, which keeps initializing.
-func abandon[Value any](ctx context.Context, currentState *state[Value]) (Value, error) {
+func abandon[Value any](ctx context.Context, currentState *state[Value]) ports.Result[Value] {
 	if currentState.settled.Load() {
-		//nolint:wrapcheck // Preserve cached error identity.
 		return result(currentState)
 	}
 
 	var zero Value
 
-	return zero, fmt.Errorf(
-		"singleton: waiting for initialization: %w",
-		context.Cause(ctx),
-	)
+	return ports.Result[Value]{Value: zero, Err: fmt.Errorf(
+		"singleton: waiting for initialization: %w", context.Cause(ctx),
+	)}
 }
 
 func initialize[Value any](provider *lifecycle[Value], current *state[Value]) {
 	defer finish(current)
 
-	value, err := provider.retrier.Do(context.Background(), provider.factory)
-	if err != nil {
-		current.err = err
+	outcome := provider.retrier.Do(context.Background(), provider.factory)
+	if outcome.Err != nil {
+		current.outcome.Err = outcome.Err
 
 		return
 	}
 
-	current.value = value
+	current.outcome = outcome
 }
 
 func finish[Value any](currentState *state[Value]) {
@@ -193,5 +187,5 @@ func canReset[Value any](current *state[Value]) bool {
 		return false
 	}
 
-	return current.panicked || current.err != nil
+	return current.panicked || current.outcome.Err != nil
 }

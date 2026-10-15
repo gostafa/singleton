@@ -152,6 +152,25 @@ func TestPublicConstructionErrors(t *testing.T) {
 			options: []singleton.Option{singleton.WithRetryInterval(time.Second, time.Millisecond)},
 			want:    singleton.ErrMaxIntervalBelowInitial,
 		},
+		"nil factory before invalid option": {
+			options: []singleton.Option{{}},
+			want:    singleton.ErrNilFactory,
+		},
+		"first invalid option wins": {
+			factory: successfulFactory,
+			options: []singleton.Option{singleton.WithMaxAttempts(0), {}},
+			want:    singleton.ErrZeroMaxAttempts,
+		},
+		"zero option before invalid attempts": {
+			factory: successfulFactory,
+			options: []singleton.Option{{}, singleton.WithMaxAttempts(0)},
+			want:    singleton.ErrInvalidOption,
+		},
+		"initial interval before maximum": {
+			factory: successfulFactory,
+			options: []singleton.Option{singleton.WithRetryInterval(0, -time.Second)},
+			want:    singleton.ErrZeroInitialInterval,
+		},
 	}
 
 	for name, test := range tests {
@@ -159,8 +178,94 @@ func TestPublicConstructionErrors(t *testing.T) {
 			t.Parallel()
 
 			provider, err := singleton.New(test.factory, test.options...)
-			if provider != nil || !errors.Is(err, test.want) {
+			if provider != nil || err != test.want {
 				t.Errorf("New() = (%v, %v), want (nil, %v)", provider, err, test.want)
+			}
+		})
+	}
+}
+
+func TestConcurrentGetsShareTheSamePublicFailure(t *testing.T) {
+	t.Parallel()
+
+	const callers = 32
+
+	var calls atomic.Uint32
+	provider := singleton.MustNew(func(context.Context) (int, error) {
+		calls.Add(1)
+		return 99, errFactory
+	}, singleton.WithMaxAttempts(1))
+	start := make(chan struct{})
+	results := make(chan error, callers)
+	for range callers {
+		go func() {
+			<-start
+			value, err := provider.Get(t.Context())
+			if value != 0 {
+				t.Errorf("Get() value = %d, want zero on failure", value)
+			}
+			results <- err
+		}()
+	}
+	close(start)
+
+	first := <-results
+	failure, ok := first.(*singleton.InitError)
+	if !ok {
+		t.Fatalf("Get() error = %T, want *singleton.InitError", first)
+	}
+	for range callers - 1 {
+		assertEqual(t, "shared error identity", <-results, first)
+	}
+	_, cached := provider.Get(t.Context())
+	assertEqual(t, "cached error identity", cached, first)
+	assertEqual(t, "factory error identity", failure.Err(), errFactory)
+	assertEqual(t, "factory calls", calls.Load(), uint32(1))
+}
+
+type factoryFailure struct{ cause error }
+
+func (failure *factoryFailure) Error() string { return failure.cause.Error() }
+
+func (failure *factoryFailure) Unwrap() error { return failure.cause }
+
+func TestCustomFactoryErrorsRemainUnchanged(t *testing.T) {
+	t.Parallel()
+
+	failure := &factoryFailure{cause: errFactory}
+	tests := map[string]struct {
+		err    error
+		reason singleton.FailureReason
+		events int
+	}{
+		"exhausted": {err: failure, reason: singleton.FailureExhausted, events: 2},
+		"permanent": {err: singleton.Permanent(failure), reason: singleton.FailurePermanent},
+		"wrapped permanent": {
+			err:    fmt.Errorf("factory: %w", singleton.Permanent(failure)),
+			reason: singleton.FailurePermanent,
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			var events []singleton.RetryEvent
+			provider := singleton.MustNew(func(context.Context) (int, error) {
+				return 99, test.err
+			}, append(quickOptions(), singleton.WithRetryObserver(func(event singleton.RetryEvent) {
+				events = append(events, event)
+			}))...)
+			value, err := provider.Get(t.Context())
+			initErr := requireInitError(t, err)
+			assertEqual(t, "failed value", value, 0)
+			assertEqual(t, "failure reason", initErr.Reason(), test.reason)
+			assertEqual(t, "original factory error", initErr.Err(), failure)
+			assertEqual(t, "retry events", len(events), test.events)
+			matched, ok := errors.AsType[*factoryFailure](err)
+			if !ok || matched != failure || !errors.Is(err, errFactory) {
+				t.Errorf("error chain = %v, want the original typed factory error", err)
+			}
+			for _, event := range events {
+				assertEqual(t, "observer factory error", event.Err, failure)
 			}
 		})
 	}

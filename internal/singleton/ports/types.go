@@ -9,11 +9,19 @@ import (
 )
 
 type (
+	// Result carries an initialization outcome without changing its error identity.
+	Result[T any] = struct {
+		// Value is the operation's value; retriers discard it on failure.
+		Value T
+		// Err is the original attempt error or classified initialization failure.
+		Err error
+	}
+
 	// Operation is one initialization attempt.
 	//
 	// The context belongs to the [Retrier], not to any caller waiting on the
 	// result.
-	Operation[T any] = func(context.Context) (T, error)
+	Operation[T any] = func(context.Context) Result[T]
 
 	// Retrier runs an operation until it succeeds or its policy gives up.
 	//
@@ -38,6 +46,6 @@ type (
 		//
 		// Do owns the operation's context lifetime and derives any deadline from
 		// its own policy, so ctx is only the parent.
-		Do(ctx context.Context, op Operation[T]) (T, error)
+		Do(ctx context.Context, op Operation[T]) Result[T]
 	}
 )

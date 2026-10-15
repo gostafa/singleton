@@ -93,14 +93,14 @@ func defaultConfig() config {
 // [New] reports [ErrZeroMaxAttempts] if attempts is zero.
 func WithMaxAttempts(attempts uint) Option {
 	return Option{
-		apply: func(cfg *config) error {
+		apply: func(cfg *config) validationCode {
 			if attempts == zeroAttempts {
-				return ErrZeroMaxAttempts
+				return zeroMaxAttempts
 			}
 
 			cfg.retry.MaxAttempts = attempts
 
-			return nil
+			return validOptions
 		},
 	}
 }
@@ -113,14 +113,14 @@ func WithMaxAttempts(attempts uint) Option {
 // if timeout is negative.
 func WithInitializationTimeout(timeout time.Duration) Option {
 	return Option{
-		apply: func(cfg *config) error {
+		apply: func(cfg *config) validationCode {
 			if timeout < zeroAttempts {
-				return ErrNegativeTimeout
+				return negativeTimeout
 			}
 
 			cfg.retry.Timeout = timeout
 
-			return nil
+			return validOptions
 		},
 	}
 }
@@ -133,19 +133,19 @@ func WithInitializationTimeout(timeout time.Duration) Option {
 // [ErrMaxIntervalBelowInitial] if maximum is less than initial.
 func WithRetryInterval(initial, maximum time.Duration) Option {
 	return Option{
-		apply: func(cfg *config) error {
+		apply: func(cfg *config) validationCode {
 			if initial <= zeroAttempts {
-				return ErrZeroInitialInterval
+				return zeroInitialInterval
 			}
 
 			if maximum < initial {
-				return ErrMaxIntervalBelowInitial
+				return maxIntervalBelowInitial
 			}
 
 			cfg.retry.InitialInterval = initial
 			cfg.retry.MaxInterval = maximum
 
-			return nil
+			return validOptions
 		},
 	}
 }
@@ -160,10 +160,10 @@ func WithRetryInterval(initial, maximum time.Duration) Option {
 // it.
 func WithRetryObserver(observer func(RetryEvent)) Option {
 	return Option{
-		apply: func(cfg *config) error {
+		apply: func(cfg *config) validationCode {
 			cfg.retry.Observer = internalObserver(observer)
 
-			return nil
+			return validOptions
 		},
 	}
 }
@@ -186,22 +186,18 @@ func internalObserver(observer func(RetryEvent)) domain.RetryObserver {
 func (reason publicRetrier[Value]) Do(
 	ctx context.Context,
 	operation ports.Operation[Value],
-) (Value, error) {
-	value, err := reason.retrier.Do(ctx, internalOperation(operation))
-
-	//nolint:wrapcheck // Preserve the public initialization error.
-	return publicResult(value, err)
+) ports.Result[Value] {
+	return publicResult(reason.retrier.Do(ctx, operation))
 }
 
-func internalOperation[Value any](operation ports.Operation[Value]) ports.Operation[Value] {
-	return func(ctx context.Context) (Value, error) {
+func internalOperation[Value any](operation Factory[Value]) ports.Operation[Value] {
+	return func(ctx context.Context) ports.Result[Value] {
 		value, err := operation(ctx)
 		if permanent, ok := errors.AsType[*PermanentError](err); ok {
-			return value, backoffretry.Permanent(permanent.Err)
+			return ports.Result[Value]{Value: value, Err: backoffretry.Permanent(permanent.Err)}
 		}
 
-		//nolint:wrapcheck // Preserve factory errors for classification and observers.
-		return value, err
+		return ports.Result[Value]{Value: value, Err: err}
 	}
 }
 
@@ -252,11 +248,15 @@ func publicFailure(reason domain.FailureReason) (FailureReason, error) {
 // zero value. A failed initialization is cached and returned to every later
 // caller until Reset is called.
 func (provider *Provider[Value]) Get(ctx context.Context) (Value, error) {
-	//nolint:wrapcheck // Preserve the cached public error's identity.
-	return get(ctx, provider.provider)
+	outcome := get(ctx, provider.provider)
+
+	return outcome.Value, outcome.Err
 }
 
-func get[Value any](ctx context.Context, provider application.Interface[Value]) (Value, error) {
+func get[Value any](
+	ctx context.Context,
+	provider application.Interface[Value],
+) ports.Result[Value] {
 	if ctx == nil {
 		//nolint:forbidigo // Preserve the documented panic contract.
 		panic("singleton: nil context")
@@ -267,7 +267,6 @@ func get[Value any](ctx context.Context, provider application.Interface[Value]) 
 		panic("singleton: Provider must be created with New or MustNew")
 	}
 
-	//nolint:wrapcheck // Preserve the cached public error's identity.
 	return provider.Get(ctx)
 }
 
@@ -314,10 +313,9 @@ func New[Value any](
 
 	cfg := defaultConfig()
 
-	err := applyOptions(&cfg, options)
-	if err != nil {
-		//nolint:wrapcheck // Preserve validation sentinel identity.
-		return nil, err
+	code := applyOptions(&cfg, options)
+	if code != validOptions {
+		return nil, validationErrors()[code]
 	}
 
 	cfg.retry.Observer = domain.Safe(cfg.retry.Observer)
@@ -342,20 +340,19 @@ func MustNew[Value any](
 	return provider
 }
 
-func applyOptions(cfg *config, options []Option) error {
+func applyOptions(cfg *config, options []Option) validationCode {
 	for index := range options {
 		if options[index].apply == nil {
-			return ErrInvalidOption
+			return invalidOption
 		}
 
-		err := options[index].applyTo(cfg)
-		if err != nil {
-			//nolint:wrapcheck // Preserve validation sentinel identity.
-			return err
+		code := options[index].applyTo(cfg)
+		if code != validOptions {
+			return code
 		}
 	}
 
-	return nil
+	return validOptions
 }
 
 func publicErrorChain(err, cause error) []error {
@@ -375,21 +372,31 @@ func publicErrorChain(err, cause error) []error {
 func configuredProvider[Value any](factory Factory[Value], cfg *config) *Provider[Value] {
 	return &Provider[Value]{
 		provider: application.NewProvider(
-			factory,
+			internalOperation(factory),
 			publicRetrier[Value]{retrier: backoffretry.New[Value](cfg.retry)},
 		),
 	}
 }
 
-func (option Option) applyTo(cfg *config) error {
-	//nolint:wrapcheck // Preserve option validation error identity.
+func validationErrors() map[validationCode]error {
+	return map[validationCode]error{
+		validOptions:            nil,
+		invalidOption:           ErrInvalidOption,
+		zeroMaxAttempts:         ErrZeroMaxAttempts,
+		negativeTimeout:         ErrNegativeTimeout,
+		zeroInitialInterval:     ErrZeroInitialInterval,
+		maxIntervalBelowInitial: ErrMaxIntervalBelowInitial,
+	}
+}
+
+func (option Option) applyTo(cfg *config) validationCode {
 	return option.apply(cfg)
 }
 
-func publicResult[Value any](value Value, err error) (Value, error) {
-	if err == nil {
-		return value, nil
+func publicResult[Value any](outcome ports.Result[Value]) ports.Result[Value] {
+	if outcome.Err != nil {
+		outcome.Err = publicInitError(outcome.Err)
 	}
 
-	return value, publicInitError(err)
+	return outcome
 }

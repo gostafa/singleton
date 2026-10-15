@@ -24,7 +24,7 @@ type (
 	// Interface is the concurrent initialization behavior exposed to callers.
 	Interface[T any] interface {
 		// Get waits for the shared initialization.
-		Get(ctx context.Context) (T, error)
+		Get(ctx context.Context) ports.Result[T]
 		// Reset discards an unsuccessful initialization.
 		Reset()
 	}
@@ -37,8 +37,7 @@ type (
 	}
 
 	state[T any] = struct {
-		value      T
-		err        error
+		outcome    ports.Result[T]
 		panicValue any
 		done       chan struct{}
 		settled    atomic.Bool

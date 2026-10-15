@@ -24,7 +24,7 @@ var (
 // entirely through its factory.
 type onceRetrier[T any] struct{}
 
-func (onceRetrier[T]) Do(ctx context.Context, op ports.Operation[T]) (T, error) {
+func (onceRetrier[T]) Do(ctx context.Context, op ports.Operation[T]) ports.Result[T] {
 	return op(ctx)
 }
 
@@ -32,10 +32,8 @@ func (onceRetrier[T]) Do(ctx context.Context, op ports.Operation[T]) (T, error) 
 // up before the first attempt could report anything.
 type failingRetrier[T any] struct{}
 
-func (failingRetrier[T]) Do(context.Context, ports.Operation[T]) (T, error) {
-	var zero T
-
-	return zero, errNoRetry
+func (failingRetrier[T]) Do(context.Context, ports.Operation[T]) ports.Result[T] {
+	return ports.Result[T]{Err: errNoRetry}
 }
 
 func recoveredValue(t *testing.T, call func()) any {
@@ -61,14 +59,14 @@ func TestGetInitializesOnceAndCachesTheValue(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		return 42, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	for range 3 {
-		got, err := provider.Get(t.Context())
+		got, err := testUnpack(provider.Get(t.Context()))
 		if err != nil {
 			t.Fatalf("Get() error = %v, want nil", err)
 		}
@@ -88,14 +86,14 @@ func TestGetCachesTheFailure(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		return 9, errInit
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	for range 2 {
-		got, err := provider.Get(t.Context())
+		got, err := testUnpack(provider.Get(t.Context()))
 		if !errors.Is(err, errInit) {
 			t.Fatalf("Get() error = %v, want %v", err, errInit)
 		}
@@ -113,13 +111,13 @@ func TestGetCachesTheFailure(t *testing.T) {
 func TestGetSurfacesARetrierFailureWithoutRunningTheFactory(t *testing.T) {
 	t.Parallel()
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		t.Error("the factory ran, want the retrier to fail first")
 
 		return 0, nil
-	}, failingRetrier[int]{})
+	}), failingRetrier[int]{})
 
-	_, err := provider.Get(t.Context())
+	_, err := testUnpack(provider.Get(t.Context()))
 	if !errors.Is(err, errNoRetry) {
 		t.Errorf("Get() error = %v, want %v", err, errNoRetry)
 	}
@@ -130,16 +128,16 @@ func TestGetRePanicsWithTheFactoryPanic(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		panic("factory exploded")
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	// The first Get re-panics from the settling state, the second from the
 	// cached one.
 	for range 2 {
-		got := recoveredValue(t, func() { _, _ = provider.Get(t.Context()) })
+		got := recoveredValue(t, func() { _, _ = testUnpack(provider.Get(t.Context())) })
 		if got != "factory exploded" {
 			t.Errorf("recovered %v, want %q", got, "factory exploded")
 		}
@@ -153,13 +151,13 @@ func TestGetRePanicsWithTheFactoryPanic(t *testing.T) {
 func TestGetPanicsOnANilContext(t *testing.T) {
 	t.Parallel()
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		return 1, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	var nilCtx context.Context
 
-	got := recoveredValue(t, func() { _, _ = provider.Get(nilCtx) })
+	got := recoveredValue(t, func() { _, _ = testUnpack(provider.Get(nilCtx)) })
 	if got != "singleton: nil context" {
 		t.Errorf("recovered %v, want %q", got, "singleton: nil context")
 	}
@@ -171,16 +169,16 @@ func TestGetStopsWaitingWhenTheCallerContextEnds(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		<-release
 
 		return 7, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	ctx, cancel := context.WithCancelCause(t.Context())
 	cancel(errGaveUp)
 
-	got, err := provider.Get(ctx)
+	got, err := testUnpack(provider.Get(ctx))
 	if got != 0 {
 		t.Errorf("Get() = %d, want the zero value", got)
 	}
@@ -198,13 +196,13 @@ func TestGetStopsWaitingWhenTheCallerContextEnds(t *testing.T) {
 func TestResetBeforeTheFirstGetDoesNothing(t *testing.T) {
 	t.Parallel()
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		return 3, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	provider.Reset()
 
-	got, err := provider.Get(t.Context())
+	got, err := testUnpack(provider.Get(t.Context()))
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
@@ -219,22 +217,22 @@ func TestResetDiscardsAFailedInitialization(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		if calls.Add(1) == 1 {
 			return 0, errInit
 		}
 
 		return 5, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
-	_, err := provider.Get(t.Context())
+	_, err := testUnpack(provider.Get(t.Context()))
 	if !errors.Is(err, errInit) {
 		t.Fatalf("Get() error = %v, want %v", err, errInit)
 	}
 
 	provider.Reset()
 
-	got, err := provider.Get(t.Context())
+	got, err := testUnpack(provider.Get(t.Context()))
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -249,19 +247,19 @@ func TestResetDiscardsAPanickedInitialization(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		if calls.Add(1) == 1 {
 			panic("factory exploded")
 		}
 
 		return 5, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
-	_ = recoveredValue(t, func() { _, _ = provider.Get(t.Context()) })
+	_ = recoveredValue(t, func() { _, _ = testUnpack(provider.Get(t.Context())) })
 
 	provider.Reset()
 
-	got, err := provider.Get(t.Context())
+	got, err := testUnpack(provider.Get(t.Context()))
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -276,18 +274,18 @@ func TestResetKeepsASuccessfulValue(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		return int(calls.Add(1)), nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
-	_, err := provider.Get(t.Context())
+	_, err := testUnpack(provider.Get(t.Context()))
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
 
 	provider.Reset()
 
-	got, err := provider.Get(t.Context())
+	got, err := testUnpack(provider.Get(t.Context()))
 	if err != nil {
 		t.Fatalf("Get() after Reset error = %v, want nil", err)
 	}
@@ -305,20 +303,20 @@ func TestResetLeavesAnInFlightInitializationAlone(t *testing.T) {
 	entered := make(chan struct{})
 	release := make(chan struct{})
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		calls.Add(1)
 		close(entered)
 		<-release
 
 		return 7, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	// Start initialization without waiting for it: an already-canceled caller
 	// abandons its wait the instant the state exists.
 	abandoned, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, abandonedErr := provider.Get(abandoned)
+	_, abandonedErr := testUnpack(provider.Get(abandoned))
 	if abandonedErr == nil {
 		t.Fatal("Get() with a canceled context returned no error")
 	}
@@ -329,7 +327,7 @@ func TestResetLeavesAnInFlightInitializationAlone(t *testing.T) {
 
 	close(release)
 
-	got, err := provider.Get(t.Context())
+	got, err := testUnpack(provider.Get(t.Context()))
 	if err != nil {
 		t.Fatalf("Get() error = %v, want nil", err)
 	}
@@ -350,11 +348,11 @@ func TestConcurrentGetsShareOneInitialization(t *testing.T) {
 
 	var calls atomic.Int64
 
-	provider := application.NewProvider(func(context.Context) (int, error) {
+	provider := application.NewProvider(testOperation(func(context.Context) (int, error) {
 		calls.Add(1)
 
 		return 21, nil
-	}, onceRetrier[int]{})
+	}), onceRetrier[int]{})
 
 	start := make(chan struct{})
 
@@ -368,7 +366,7 @@ func TestConcurrentGetsShareOneInitialization(t *testing.T) {
 
 			<-start
 
-			got, err := provider.Get(t.Context())
+			got, err := testUnpack(provider.Get(t.Context()))
 			if err != nil || got != 21 {
 				t.Errorf("Get() = (%d, %v), want (21, nil)", got, err)
 			}
@@ -381,4 +379,16 @@ func TestConcurrentGetsShareOneInitialization(t *testing.T) {
 	if calls.Load() != 1 {
 		t.Errorf("the factory ran %d times, want 1", calls.Load())
 	}
+}
+
+// testOperation adapts a factory to the internal result contract.
+func testOperation[T any](factory func(context.Context) (T, error)) ports.Operation[T] {
+	return func(ctx context.Context) ports.Result[T] {
+		value, err := factory(ctx)
+		return ports.Result[T]{Value: value, Err: err}
+	}
+}
+
+func testUnpack[T any](outcome ports.Result[T]) (T, error) {
+	return outcome.Value, outcome.Err
 }
