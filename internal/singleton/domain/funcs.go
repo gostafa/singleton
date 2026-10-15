@@ -17,8 +17,10 @@ func Safe(observer RetryObserver) RetryObserver {
 
 	return func(event RetryEvent) {
 		defer func() {
-			//nolint:errcheck // Observer panic values are deliberately discarded.
-			_ = recover()
+			if recover() != nil {
+				// Observer panics must not escape into singleton initialization.
+				return
+			}
 		}()
 
 		observer(event)
