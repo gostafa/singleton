@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gostafa/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/singleton/domain"
 )
 
 var errFactory = errors.New("factory failed")

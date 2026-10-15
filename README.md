@@ -517,28 +517,28 @@ The initialization context descends from `context.Background()` with only a time
 
 ## Architecture
 
-Ports and adapters, with everything but the facade under `internal/`:
+Ports and adapters, with the singleton feature grouped under `internal/singleton/`:
 
 ```
 types.go                           public types and private boundary state
 funcs.go                           facade, options, error accessors and conversions
 consts.go, vars.go                  defaults, failure reasons and error values
-internal/
+internal/singleton/
   domain/                          failure contracts and retry event payloads
   ports/                           the outbound Retrier port
   application/                     lazy single-flight state machine
-  adapters/backoffretry/           retry engine and concrete internal failures
+  adapters/backoffretry/            retry engine and concrete internal failures
 ```
 
 Public types are defined in `singleton` and reference only public or standard-library types in their exported fields and signatures. Private adapters translate permanent markers, retry events, and initialization failures between this API and the internal implementation. Failures are converted before caching so callers share one public error instance.
 
-The application provider delegates to a private `lifecycle` that owns the factory, retrier, mutex, and current state. Each initialization run stores its value, error, or panic in that state and signals completion to waiting callers. `Reset` discards only a settled unsuccessful state.
+The application exposes an `Interface`; its private provider delegates to a private `lifecycle` that owns the factory, retrier, mutex, and current state. Each initialization run stores its value, error, or panic in that state and signals completion to waiting callers. `Reset` discards only a settled unsuccessful state.
 
 The domain defines `InitError` and `PermanentError` as interfaces. The backoff adapter implements them with concrete errors, and the facade converts them to the public `*singleton.InitError` and translates public permanent markers into adapter markers. The public error types remain structs; consumers use `Reason()` and `Err()` on `InitError`, and the exported `Err` field on `PermanentError`.
 
 The `Retrier` port is what keeps `cenkalti/backoff` out of the API entirely, and it carries three obligations any adapter must honour: run the operation at least once; return the **zero** `T` on failure, never a half-built value; and set `Reason()` from the policy's own stop condition rather than inferring it from the operation's error.
 
-`go list -deps` on `internal/application`, `internal/domain` and `internal/ports` resolves **zero** backoff imports — the core does not know a retry engine exists.
+`go list -deps` on `internal/singleton/application`, `internal/singleton/domain` and `internal/singleton/ports` resolves **zero** backoff imports — the core does not know a retry engine exists.
 
 
 ## License

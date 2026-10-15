@@ -7,20 +7,22 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 // NewProvider wires a factory to the retry policy that will drive it.
+//
+//nolint:iface // Keep the implementation private behind the application contract.
 func NewProvider[Value any](
 	factory ports.Operation[Value],
 	retrier ports.Retrier[Value],
-) *Provider[Value] {
-	provider := new(lifecycle[Value])
+) Interface[Value] {
+	instance := new(lifecycle[Value])
 
-	provider.factory = factory
-	provider.retrier = retrier
+	instance.factory = factory
+	instance.retrier = retrier
 
-	return &Provider[Value]{lifecycle: provider}
+	return &provider[Value]{lifecycle: instance}
 }
 
 // Get waits for and returns the shared value, starting initialization on the
@@ -29,13 +31,13 @@ func NewProvider[Value any](
 // The caller's context cancels only this caller's wait. It does not cancel the
 // shared initialization, so one short-lived request cannot poison the
 // singleton for the entire process. A failed initialization is cached and
-// returned to every later caller until [Provider.Reset] is called.
+// returned to every later caller until [Interface.Reset] is called.
 //
 // Get returns the zero Value with an error wrapping context.Cause(ctx) if the
 // caller's context ends before initialization settles, and re-panics with the
 // factory's panic value if the factory panicked. It panics if ctx is nil or if
-// the Provider is the zero value.
-func (provider *Provider[Value]) Get(ctx context.Context) (Value, error) {
+// the provider is the zero value.
+func (provider *provider[Value]) Get(ctx context.Context) (Value, error) {
 	//nolint:wrapcheck // Preserve the cached initialization error.
 	return get(ctx, provider.lifecycle)
 }
@@ -69,12 +71,12 @@ func wait[Value any](ctx context.Context, currentState *state[Value]) (Value, er
 }
 
 // Reset discards a failed or panicked initialization so the next
-// [Provider.Get] starts a new one.
+// [Interface.Get] starts a new one.
 //
 // It does nothing while initialization is in progress, so callers already
 // waiting are never left on a discarded state, and nothing after a success,
 // because a live value other goroutines already hold must not be torn down.
-func (provider *Provider[Value]) Reset() {
+func (provider *provider[Value]) Reset() {
 	reset(provider.lifecycle)
 }
 

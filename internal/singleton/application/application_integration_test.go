@@ -10,8 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/gostafa/singleton/internal/application"
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/application"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 var (
@@ -162,19 +162,6 @@ func TestGetPanicsOnANilContext(t *testing.T) {
 	got := recoveredValue(t, func() { _, _ = provider.Get(nilCtx) })
 	if got != "singleton: nil context" {
 		t.Errorf("recovered %v, want %q", got, "singleton: nil context")
-	}
-}
-
-func TestGetPanicsOnTheZeroProvider(t *testing.T) {
-	t.Parallel()
-
-	var provider application.Provider[int]
-
-	const want = "singleton: Provider must be created with New or MustNew"
-
-	got := recoveredValue(t, func() { _, _ = provider.Get(t.Context()) })
-	if got != want {
-		t.Errorf("recovered %v, want %q", got, want)
 	}
 }
 

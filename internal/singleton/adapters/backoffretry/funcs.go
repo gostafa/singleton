@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v7"
-	"github.com/gostafa/singleton/internal/domain"
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/domain"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 // New builds a retry adapter for values of type Value, exposed through its port.

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/cenkalti/backoff/v7"
-	"github.com/gostafa/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/singleton/domain"
 )
 
 var errBoom = errors.New("boom")

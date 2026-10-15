@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 // lockHandoff is how long a test waits for a goroutine to park on the
@@ -49,11 +49,14 @@ func TestAbandonReturnsTheResultWhenInitializationWinsTheRace(t *testing.T) {
 func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
 	t.Parallel()
 
-	provider := NewProvider(func(context.Context) (int, error) {
+	provider := new(lifecycle[int])
+
+	provider.factory = func(context.Context) (int, error) {
 		t.Error("the factory ran, want load to adopt the stored state")
 
 		return 0, nil
-	}, onceRetrier[int]{})
+	}
+	provider.retrier = onceRetrier[int]{}
 
 	existing := new(state[int])
 
@@ -62,17 +65,17 @@ func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
 	existing.settled.Store(true)
 	close(existing.done)
 
-	provider.lifecycle.mu.Lock()
+	provider.mu.Lock()
 
 	loaded := make(chan *state[int], 1)
 
-	go func() { loaded <- load(provider.lifecycle) }()
+	go func() { loaded <- load(provider) }()
 
 	// The goroutine finds a nil state and parks on the held mutex; only then is
 	// there a state for it to discover on the second check.
 	time.Sleep(lockHandoff)
-	provider.lifecycle.current.Store(existing)
-	provider.lifecycle.mu.Unlock()
+	provider.current.Store(existing)
+	provider.mu.Unlock()
 
 	if got := <-loaded; got != existing {
 		t.Errorf("load() = %p, want the stored state %p", got, existing)
@@ -81,8 +84,8 @@ func TestLoadReturnsTheStateStoredWhileItWaitedForTheLock(t *testing.T) {
 
 func TestResetZeroProviderDoesNothing(t *testing.T) {
 	t.Parallel()
-	var provider Provider[int]
-	provider.Reset()
+	var instance provider[int]
+	instance.Reset()
 }
 
 func TestGetRejectsMissingFactory(t *testing.T) {
@@ -94,4 +97,18 @@ func TestGetRejectsMissingFactory(t *testing.T) {
 		}
 	}()
 	_, _ = provider.Get(t.Context())
+}
+
+func TestGetPanicsOnTheZeroProvider(t *testing.T) {
+	t.Parallel()
+
+	var instance provider[int]
+
+	defer func() {
+		if got := recover(); got != uninitializedProvider {
+			t.Errorf("recovered %v, want %q", got, uninitializedProvider)
+		}
+	}()
+
+	_, _ = instance.Get(t.Context())
 }

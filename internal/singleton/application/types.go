@@ -1,6 +1,7 @@
 // Gostafa 2026.
 // SPDX-License-Identifier: Apache-2.0.
 
+// Package application coordinates lazy, shared singleton initialization.
 package application
 
 import (
@@ -8,15 +9,15 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 type (
-	// Provider lazily initializes and returns one shared value.
+	// provider lazily initializes and returns one shared value.
 	//
-	// Build one with [NewProvider]. The zero value is not usable and a Provider
+	// Build one with [NewProvider]. The zero value is not usable and a provider
 	// must not be copied after first use. It is safe for concurrent use.
-	Provider[T any] struct {
+	provider[T any] struct {
 		lifecycle *lifecycle[T]
 	}
 

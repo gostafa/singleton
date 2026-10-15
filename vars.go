@@ -6,7 +6,7 @@ package singleton
 import (
 	"errors"
 
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 var (

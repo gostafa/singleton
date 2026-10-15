@@ -4,7 +4,7 @@
 package backoffretry
 
 import (
-	"github.com/gostafa/singleton/internal/ports"
+	"github.com/gostafa/singleton/internal/singleton/ports"
 )
 
 var _ ports.Retrier[int] = (*retrier[int])(nil)

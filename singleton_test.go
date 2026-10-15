@@ -8,7 +8,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gostafa/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/singleton/domain"
 )
 
 var errInternalStop = errors.New("private retry stop condition")

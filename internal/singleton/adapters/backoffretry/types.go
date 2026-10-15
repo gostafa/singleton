@@ -8,7 +8,7 @@ package backoffretry
 import (
 	"time"
 
-	"github.com/gostafa/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/singleton/domain"
 )
 
 type (

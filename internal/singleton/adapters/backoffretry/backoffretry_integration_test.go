@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gostafa/singleton/internal/adapters/backoffretry"
-	"github.com/gostafa/singleton/internal/domain"
+	"github.com/gostafa/singleton/internal/singleton/adapters/backoffretry"
+	"github.com/gostafa/singleton/internal/singleton/domain"
 )
 
 var (
