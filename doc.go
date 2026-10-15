@@ -21,5 +21,5 @@
 // Their error chain exposes both the factory error and the public stop error.
 // [NewInitError] constructs a standalone failure that unwraps only its cause.
 //
-// This package requires Go 1.26.6 or later.
+// This package requires Go 1.27.2 or later.
 package singleton

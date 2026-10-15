@@ -62,7 +62,7 @@ go get github.com/gostafa/singleton
 import "github.com/gostafa/singleton"
 ```
 
-**Requires Go 1.26.6+**. One dependency: [`cenkalti/backoff/v7`](https://github.com/cenkalti/backoff), fully quarantined behind an internal adapter — none of its types appear in this package's API.
+**Requires Go 1.27.2+**. One dependency: [`cenkalti/backoff/v7`](https://github.com/cenkalti/backoff), fully quarantined behind an internal adapter — none of its types appear in this package's API.
 
 ## Quick Start
 

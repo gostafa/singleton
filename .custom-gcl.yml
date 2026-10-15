@@ -5,13 +5,13 @@ name: custom-golangci-lint
 plugins:
   - module: github.com/gostafa/coverlint
     import: github.com/gostafa/coverlint/plugin
-    version: v0.0.7
+    version: v0.0.9
   - module: github.com/gostafa/reusability
     import: github.com/gostafa/reusability/plugin
-    version: v0.0.1
+    version: v0.0.3
   - module: github.com/gostafa/distance
     import: github.com/gostafa/distance/plugin
-    version: v0.0.1
+    version: v0.0.2
   - module: github.com/gostafa/vulner
     import: github.com/gostafa/vulner/plugin
-    version: v0.0.1
+    version: v0.0.2
